@@ -1,0 +1,78 @@
+{
+  "name": "AgroMind - Daily Farm Report",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "0 8 * * *" }]
+        }
+      },
+      "id": "cron-daily",
+      "name": "Daily 8AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": { "url": "http://localhost:8000/sensor/history", "options": {} },
+      "id": "get-history",
+      "name": "Get 24h History",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [500, 300]
+    },
+    {
+      "parameters": { "url": "http://localhost:8000/pump/usage/today", "options": {} },
+      "id": "get-pump",
+      "name": "Get Pump Usage",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [500, 450]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:11434/api/generate",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "model", "value": "qwen2.5:14b" },
+            { "name": "stream", "value": false },
+            { "name": "prompt", "value": "=You are an agricultural assistant. Write a plain English daily farm report for a small farmer based on this data:\n\n24h sensor readings (latest 10): {{ JSON.stringify($('Get 24h History').item.json.slice(0,10)) }}\n\nPump usage today: {{ $('Get Pump Usage').item.json.total_on_seconds }} seconds total runtime.\n\nWrite 3-4 sentences summarizing soil health, irrigation activity, and any recommendations." }
+          ]
+        }
+      },
+      "id": "ollama-report",
+      "name": "Generate Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [750, 375]
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "=C:\\My files\\AroMindAI\\reports\\report_{{ $now.toFormat('yyyy-MM-dd') }}.txt",
+        "text": "={{ $json.response }}"
+      },
+      "id": "save-report",
+      "name": "Save Report",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [1000, 375]
+    }
+  ],
+  "connections": {
+    "Daily 8AM": {
+      "main": [
+        [{ "node": "Get 24h History", "type": "main", "index": 0 }],
+        [{ "node": "Get Pump Usage", "type": "main", "index": 0 }]
+      ]
+    },
+    "Get 24h History": { "main": [[{ "node": "Generate Report", "type": "main", "index": 0 }]] },
+    "Get Pump Usage": { "main": [[{ "node": "Generate Report", "type": "main", "index": 0 }]] },
+    "Generate Report": { "main": [[{ "node": "Save Report", "type": "main", "index": 0 }]] }
+  },
+  "active": true,
+  "settings": {},
+  "tags": []
+}

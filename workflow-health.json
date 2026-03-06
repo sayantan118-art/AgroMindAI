@@ -1,0 +1,76 @@
+{
+  "name": "AgroMind - Health Monitor",
+  "nodes": [
+    {
+      "parameters": { "rule": { "interval": [{ "field": "minutes", "minutesInterval": 30 }] } },
+      "id": "cron-health",
+      "name": "Every 30 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:8000/sensor/latest",
+        "options": {}
+      },
+      "id": "get-latest",
+      "name": "Get Latest Sensor",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [{ "value1": "={{ $json.soil_moisture }}", "operation": "smaller", "value2": 20 }],
+          "boolean": [{ "value1": "={{ $json.rain_expected }}", "value2": false }]
+        },
+        "combineOperation": "all"
+      },
+      "id": "if-dry",
+      "name": "IF Dry & No Rain?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [750, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:11434/api/generate",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "model", "value": "qwen2.5:14b" },
+            { "name": "stream", "value": false },
+            { "name": "prompt", "value": "=Diagnose crop health. Soil moisture is critically low at {{ $('Get Latest Sensor').item.json.soil_moisture }}%. Temperature: {{ $('Get Latest Sensor').item.json.temperature }}°C. No rain expected. Give a brief 2-sentence diagnosis and urgent action." }
+          ]
+        }
+      },
+      "id": "ollama-diagnose",
+      "name": "Crop Diagnosis",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1000, 200]
+    },
+    {
+      "parameters": {
+        "command": "=powershell -Command \"Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.MessageBox]::Show('{{ $json.response.replace(/'/g, '') }}', 'AgroMind Alert', 'OK', 'Warning')\""
+      },
+      "id": "notify",
+      "name": "Desktop Notification",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [1250, 200]
+    }
+  ],
+  "connections": {
+    "Every 30 Minutes": { "main": [[{ "node": "Get Latest Sensor", "type": "main", "index": 0 }]] },
+    "Get Latest Sensor": { "main": [[{ "node": "IF Dry & No Rain?", "type": "main", "index": 0 }]] },
+    "IF Dry & No Rain?": { "main": [[{ "node": "Crop Diagnosis", "type": "main", "index": 0 }]] },
+    "Crop Diagnosis": { "main": [[{ "node": "Desktop Notification", "type": "main", "index": 0 }]] }
+  },
+  "active": true,
+  "settings": {},
+  "tags": []
+}

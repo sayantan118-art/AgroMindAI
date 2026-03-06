@@ -1,0 +1,53 @@
+{
+  "name": "AgroMind - AnythingLLM Sync",
+  "nodes": [
+    {
+      "parameters": { "rule": { "interval": [{ "field": "minutes", "minutesInterval": 15 }] } },
+      "id": "cron-sync",
+      "name": "Every 15 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": { "url": "http://localhost:8000/sensor/latest", "options": {} },
+      "id": "get-latest-sync",
+      "name": "Get Latest Sensor",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3001/api/v1/workspace/agromind/chat",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer YOUR_ANYTHINGLLM_API_KEY" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "message", "value": "Update: Soil={{ $json.soil_moisture }}%, Temp={{ $json.temperature }}°C, Decision={{ $json.decision }}" },
+            { "name": "mode", "value": "chat" }
+          ]
+        }
+      },
+      "id": "anythingllm-sync",
+      "name": "Update AnythingLLM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [750, 300]
+    }
+  ],
+  "connections": {
+    "Every 15 Minutes": { "main": [[{ "node": "Get Latest Sensor", "type": "main", "index": 0 }]] },
+    "Get Latest Sensor": { "main": [[{ "node": "Update AnythingLLM", "type": "main", "index": 0 }]] }
+  },
+  "active": true,
+  "settings": {},
+  "tags": []
+}
