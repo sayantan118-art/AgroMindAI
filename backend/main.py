@@ -1,4 +1,5 @@
 import os, json, asyncio, datetime
+from typing import Optional
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 import aiosqlite, httpx
@@ -20,7 +21,7 @@ OPEN_METEO_URL = os.getenv("OPEN_METEO_URL", "https://api.open-meteo.com/v1/fore
 LAT = os.getenv("LATITUDE", "22.5726")
 LON = os.getenv("LONGITUDE", "88.3639")
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:14b")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
 
 # Active WebSocket connections
 ws_clients: list[WebSocket] = []
@@ -35,14 +36,19 @@ async def init_db():
             CREATE TABLE IF NOT EXISTS sensor_logs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 ts TEXT DEFAULT (datetime('now','localtime')),
-                soil_moisture REAL,
-                temperature REAL,
-                humidity REAL,
-                rain_expected INTEGER,
-                decision TEXT,
-                reason TEXT,
-                health_score REAL,
-                next_check_minutes INTEGER
+                soil_moisture REAL DEFAULT 50.0,
+                temperature REAL DEFAULT 25.0,
+                humidity REAL DEFAULT 60.0,
+                rain_detected INTEGER DEFAULT 0,
+                rain_expected INTEGER DEFAULT 0,
+                light_level REAL DEFAULT 500.0,
+                last_irrigated_minutes INTEGER DEFAULT 60,
+                pump_runtime_today INTEGER DEFAULT 0,
+                decision TEXT DEFAULT 'skip',
+                reason TEXT DEFAULT 'insufficient data',
+                health_score REAL DEFAULT 50.0,
+                next_check_minutes INTEGER DEFAULT 15,
+                urgency TEXT DEFAULT 'low'
             )
         """)
         await db.execute("""
@@ -91,14 +97,16 @@ async def startup():
 
 # ── Models ────────────────────────────────────────────────────
 class SensorLog(BaseModel):
-    soil_moisture: float
-    temperature: float
-    humidity: float
-    rain_expected: bool
-    decision: str
-    reason: str
-    health_score: float
-    next_check_minutes: int
+    soil_moisture: Optional[float] = 50.0
+    temperature: Optional[float] = 25.0
+    humidity: Optional[float] = 60.0
+    rain_detected: Optional[bool] = False
+    rain_expected: Optional[bool] = False
+    health_score: Optional[float] = 0.0
+    urgency: Optional[str] = "low"
+    decision: Optional[str] = "skip"
+    reason: Optional[str] = "no data"
+    next_check_minutes: Optional[int] = 15
 
 class PumpAction(BaseModel):
     action: str
@@ -111,12 +119,13 @@ async def log_sensor(data: SensorLog):
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
             """INSERT INTO sensor_logs
-               (soil_moisture, temperature, humidity, rain_expected,
-                decision, reason, health_score, next_check_minutes)
-               VALUES (?,?,?,?,?,?,?,?)""",
+               (soil_moisture, temperature, humidity, rain_detected, rain_expected,
+                health_score, urgency, decision, reason, next_check_minutes)
+               VALUES (?,?,?,?,?,?,?,?,?,?)""",
             (data.soil_moisture, data.temperature, data.humidity,
-             int(data.rain_expected), data.decision, data.reason,
-             data.health_score, data.next_check_minutes)
+             int(data.rain_detected), int(data.rain_expected),
+             data.health_score, data.urgency, data.decision, data.reason,
+             data.next_check_minutes)
         )
         await db.commit()
     payload = data.model_dump()

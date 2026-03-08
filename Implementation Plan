@@ -91,7 +91,7 @@ requests
 MQTT_BROKER=localhost
 MQTT_PORT=1883
 OLLAMA_URL=http://localhost:11434
-OLLAMA_MODEL=qwen2.5:14b
+OLLAMA_MODEL=qwen2.5:7b
 OPEN_METEO_URL=https://api.open-meteo.com/v1/forecast
 DB_PATH=agromind.db
 LATITUDE=22.5726
@@ -123,7 +123,7 @@ OPEN_METEO_URL = os.getenv("OPEN_METEO_URL")
 LAT = os.getenv("LATITUDE", "22.5726")
 LON = os.getenv("LONGITUDE", "88.3639")
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:14b")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
 
 # Active WebSocket connections
 ws_clients: list[WebSocket] = []
@@ -391,11 +391,11 @@ npm run dev
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
-            { "name": "model", "value": "qwen2.5:14b" },
+            { "name": "model", "value": "qwen2.5:7b" },
             { "name": "stream", "value": false },
             {
               "name": "prompt",
-              "value": "=You are an agricultural AI assistant. Analyze sensor data and return ONLY valid JSON.\n\nSensor Data:\n- Soil Moisture: {{ $('MQTT Trigger').item.json.soil_moisture }}%\n- Temperature: {{ $('MQTT Trigger').item.json.temperature }}°C\n- Humidity: {{ $('MQTT Trigger').item.json.humidity }}%\n- Rain Expected: {{ $('Get Weather Forecast').item.json.rain_expected }}\n- Rain Probability: {{ $('Get Weather Forecast').item.json.rain_probability_next_hour }}%\n\nDecide whether to irrigate. Return ONLY this JSON:\n{\"decision\": \"IRRIGATE\" or \"SKIP\", \"reason\": \"one sentence\", \"health_score\": 0-100, \"next_check_minutes\": 15-60}"
+              "value": "=You are an agricultural AI assistant. Analyze sensor data and return ONLY valid JSON.\n\nPRIMARY DECISION FACTORS:\n- Soil Moisture: {{ $('MQTT Trigger').item.json.soil_moisture }}%\n- Rain Expected: {{ $('Get Weather Forecast').item.json.rain_expected }}\n- Rain Probability: {{ $('Get Weather Forecast').item.json.rain_probability_next_hour }}%\n\nSUPPORTING CONTEXT:\n- Temperature: {{ $('MQTT Trigger').item.json.temperature }}°C\n- Humidity: {{ $('MQTT Trigger').item.json.humidity }}%\n- Rain Detected: {{ $('MQTT Trigger').item.json.rain_detected || false }}\n- Light Level: {{ $('MQTT Trigger').item.json.light_level || 500 }}\n- Last Irrigated: {{ $('MQTT Trigger').item.json.last_irrigated_minutes || 60 }} minutes ago\n- Pump Runtime Today: {{ $('MQTT Trigger').item.json.pump_runtime_today || 0 }} seconds\n\nINSTRUCTIONS:\nMake irrigation decisions primarily based on soil_moisture and rain signals. Use other fields as supporting context. Return ONLY this JSON:\n{\"decision\": \"IRRIGATE\" or \"SKIP\", \"reason\": \"one sentence\", \"health_score\": 0-100, \"next_check_minutes\": 15-60, \"urgency\": \"low\" or \"medium\" or \"high\"}"
             }
           ]
         }
@@ -408,7 +408,7 @@ npm run dev
     },
     {
       "parameters": {
-        "jsCode": "const raw = $input.item.json.response;\nconst match = raw.match(/\\{[\\s\\S]*\\}/);\nif (!match) throw new Error('No JSON in Ollama response');\nconst parsed = JSON.parse(match[0]);\nreturn [{ json: { ...parsed, ...items[0].json } }];"
+        "jsCode": "const raw = $input.item.json.response;\nconst match = raw.match(/\\{[\\s\\S]*\\}/);\nif (!match) throw new Error('No JSON in Ollama response');\nconst parsed = JSON.parse(match[0]);\nparsed.next_check_minutes = Math.min(parsed.next_check_minutes || 15, 3);\nconst sensor = $('MQTT Trigger').item.json;\nconst weather = $('Get Weather Forecast').item.json;\nreturn [{\n  json: {\n    soil_moisture: sensor.soil_moisture,\n    temperature: sensor.temperature,\n    humidity: sensor.humidity,\n    rain_detected: sensor.rain_detected || false,\n    rain_expected: weather.rain_expected ?? false,\n    light_level: sensor.light_level || 500.0,\n    last_irrigated_minutes: sensor.last_irrigated_minutes || 60,\n    pump_runtime_today: sensor.pump_runtime_today || 0,\n    decision: parsed.decision,\n    reason: parsed.reason,\n    health_score: parsed.health_score || 50.0,\n    next_check_minutes: parsed.next_check_minutes,\n    urgency: parsed.urgency || 'low'\n  }\n}];"
       },
       "id": "parse-decision",
       "name": "Parse Decision JSON",
@@ -560,7 +560,7 @@ npm run dev
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
-            { "name": "model", "value": "qwen2.5:14b" },
+            { "name": "model", "value": "qwen2.5:7b" },
             { "name": "stream", "value": false },
             { "name": "prompt", "value": "=Diagnose crop health. Soil moisture is critically low at {{ $('Get Latest Sensor').item.json.soil_moisture }}%. Temperature: {{ $('Get Latest Sensor').item.json.temperature }}°C. No rain expected. Give a brief 2-sentence diagnosis and urgent action." }
           ]
@@ -635,7 +635,7 @@ npm run dev
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
-            { "name": "model", "value": "qwen2.5:14b" },
+            { "name": "model", "value": "qwen2.5:7b" },
             { "name": "stream", "value": false },
             { "name": "prompt", "value": "=You are an agricultural assistant. Write a plain English daily farm report for a small farmer based on this data:\n\n24h sensor readings (latest 10): {{ JSON.stringify($('Get 24h History').item.json.slice(0,10)) }}\n\nPump usage today: {{ $('Get Pump Usage').item.json.total_on_seconds }} seconds total runtime.\n\nWrite 3-4 sentences summarizing soil health, irrigation activity, and any recommendations." }
           ]
@@ -765,7 +765,7 @@ Check-Port "React Dashboard"    5173
 
 ### Ollama test
 ```powershell
-curl -X POST http://localhost:11434/api/generate -H "Content-Type: application/json" -d "{\"model\":\"qwen2.5:14b\",\"prompt\":\"Say hello in one word.\",\"stream\":false}"
+curl -X POST http://localhost:11434/api/generate -H "Content-Type: application/json" -d "{\"model\":\"qwen2.5:7b\",\"prompt\":\"Say hello in one word.\",\"stream\":false}"
 ```
 
 ### End-to-end test

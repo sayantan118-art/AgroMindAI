@@ -104,7 +104,7 @@ const useWeatherForecast = () => {
   
   const fetchWeather = async () => {
     try {
-      const response = await fetch('http://127.0.0.1:8000/weather/forecast')
+      const response = await fetch('https://communicate-readers-panel-judge.trycloudflare.com/weather/forecast')
       if (!response.ok) throw new Error('Weather API error')
       const data = await response.json()
       setWeather(data)
@@ -133,7 +133,7 @@ const usePumpUsage = () => {
   
   const fetchUsage = async () => {
     try {
-      const response = await fetch('http://127.0.0.1:8000/pump/usage/today')
+      const response = await fetch('https://communicate-readers-panel-judge.trycloudflare.com/pump/usage/today')
       if (!response.ok) throw new Error('Pump usage API error')
       const data = await response.json()
       setUsage(data)
@@ -226,13 +226,13 @@ function App() {
   
   const { weather, loading: weatherLoading } = useWeatherForecast()
   const { usage, loading: usageLoading } = usePumpUsage()
-  const { data: wsData, connected } = useWebSocket('ws://127.0.0.1:8000/ws/dashboard')
+  const { data: wsData, connected } = useWebSocket('wss://communicate-readers-panel-judge.trycloudflare.com/ws/dashboard')
   
   // Fetch initial sensor data
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
-        const response = await fetch('http://127.0.0.1:8000/sensor/latest')
+        const response = await fetch('https://communicate-readers-panel-judge.trycloudflare.com/sensor/latest')
         if (response.ok) {
           const data = await response.json()
           setSensorData(data)
@@ -257,7 +257,7 @@ function App() {
   const togglePump = async () => {
     try {
       const newStatus = pumpStatus === 'ON' ? 'OFF' : 'ON'
-      const response = await fetch('http://127.0.0.1:8000/pump/control', {
+      const response = await fetch('https://communicate-readers-panel-judge.trycloudflare.com/pump/control', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: newStatus })

@@ -118,7 +118,7 @@ Then check n8n → Executions → "Main CPS Loop" should show a new run.
 
 ### Ollama Test
 ```powershell
-Invoke-RestMethod -Uri "http://localhost:11434/api/generate" -Method POST -ContentType "application/json" -Body '{"model":"qwen2.5:14b","prompt":"Say one word: hello.","stream":false}'
+Invoke-RestMethod -Uri "http://localhost:11434/api/generate" -Method POST -ContentType "application/json" -Body '{"model":"qwen2.5:7b","prompt":"Say one word: hello.","stream":false}'
 ```
 
 ### FastAPI Health Test
