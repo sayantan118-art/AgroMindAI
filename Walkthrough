@@ -1,0 +1,153 @@
+# AgroMind AI — Setup Walkthrough
+
+## ✅ What Was Done Automatically
+
+| Component | Status | Location |
+|---|---|---|
+| n8n (global) | ✅ Installed | `npm -g` |
+| pm2 (global) | ✅ Installed | `npm -g` |
+| pm2 Windows auto-start | ✅ Registered | Windows Registry |
+| n8n env vars | ✅ Set (User scope) | `N8N_PORT`, `N8N_BASIC_AUTH_ACTIVE`, `WEBHOOK_URL` |
+| Python virtual environment | ✅ Created | `C:\MyFiles\AgroMindAI\backend\venv` |
+| FastAPI dependencies | ✅ Installed | fastapi, uvicorn, aiosqlite, paho-mqtt, httpx … |
+| React (Vite) project | ✅ Scaffolded | `C:\MyFiles\AgroMindAI\dashboard` |
+| Tailwind v4 + recharts + lucide-react | ✅ Installed | `C:\MyFiles\AgroMindAI\dashboard` |
+| Vite proxy config | ✅ Written | `/api` → `localhost:8000`, `/ws` → `ws://localhost:8000` |
+| Reports folder | ✅ Created | `C:\MyFiles\AgroMindAI\reports` |
+
+## 📁 Files Created
+
+| File | Purpose |
+|---|---|
+| `C:\MyFiles\AgroMindAI\backend\main.py` | Full FastAPI backend |
+| `C:\MyFiles\AgroMindAI\backend\.env` | Backend environment config |
+| `C:\MyFiles\AgroMindAI\backend\requirements.txt` | pip dependencies |
+| `C:\MyFiles\AgroMindAI\dashboard\vite.config.js` | Vite + proxy + Tailwind plugin |
+| `C:\MyFiles\AgroMindAI\dashboard\tailwind.config.js` | Tailwind content paths |
+| `C:\MyFiles\AgroMindAI\dashboard\src\index.css` | Tailwind v4 import |
+| `C:\MyFiles\AgroMindAI\ecosystem.config.js` | pm2 auto-start for all services |
+| `C:\MyFiles\AgroMindAI\check_ports.ps1` | Port health checker |
+| `C:\MyFiles\AgroMindAI\mosquitto.conf` | Mosquitto broker config |
+
+---
+
+## 🔧 Manual Steps Still Required
+
+### Step 1 — Install Mosquitto MQTT
+1. Download from: https://mosquitto.org/download/ (Windows x64)
+2. Run installer (installs as a Windows service automatically)
+3. Copy the prepared config:
+```powershell
+Copy-Item C:\MyFiles\AgroMindAI\mosquitto.conf "C:\Program Files\mosquitto\mosquitto.conf" -Force
+net stop mosquitto
+net start mosquitto
+```
+4. Verify: `netstat -ano | findstr :1883` → should show a LISTENING entry
+
+---
+
+### Step 2 — Start FastAPI Backend (Already running for Dev)
+```powershell
+cd C:\MyFiles\AgroMindAI\backend
+.\venv\Scripts\activate
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+```
+Open: http://localhost:8000/docs → Swagger UI should load.
+
+---
+
+### Step 3 — n8n Setup & Workflows (Automated via Subagent)
+✅ Your n8n account has been created via browser automation using `work.sarkarsayantan118@gmail.com`.
+✅ All 4 workflows (Main CPS Loop, Health Monitor, Daily Farm Report, AnythingLLM Sync) have been imported!
+
+![n8n Import Recording](C:\Users\KIIT\.gemini\antigravity\brain\ae3ad24c-b8c1-4bf1-b17b-cd6840d3eaf2\import_workflows_with_creds_1772544398183.webp)
+
+**Remaining n8n Steps:**
+1. In n8n → **Credentials** → New → search **MQTT**
+2. Set Host: `localhost`, Port: `1883`, Protocol: `mqtt`, Name: `Mosquitto Local`
+3. Save → Test connection (should succeed after Mosquitto is running).
+4. For **Workflow 4 (AnythingLLM Sync)**, add your API key in the HTTP node if you haven't yet.
+
+---
+
+### Step 6 — Start React Dashboard
+```powershell
+cd C:\MyFiles\AgroMindAI\dashboard
+npm run dev
+```
+Open: http://localhost:5173
+
+---
+
+### Step 7 — Start Everything via pm2 (for expo)
+```powershell
+# First-time only: build the dashboard for production
+cd C:\MyFiles\AgroMindAI\dashboard
+npm run build
+
+# Then start all services
+pm2 start C:\MyFiles\AgroMindAI\ecosystem.config.js
+pm2 save
+pm2 list
+```
+
+---
+
+## 🔍 Verification Checks
+
+Run this script before the expo:
+```powershell
+pwsh -File C:\MyFiles\AgroMindAI\check_ports.ps1
+```
+
+Expected output:
+```
+  PASS  Mosquitto MQTT (port 1883)
+  PASS  FastAPI Backend (port 8000)
+  PASS  n8n Workflow Engine (port 5678)
+  PASS  AnythingLLM (port 3001)
+  PASS  Ollama (port 11434)
+  PASS  React Dashboard (port 5173)
+```
+
+### MQTT Publish Test
+```powershell
+& "C:\Program Files\mosquitto\mosquitto_pub.exe" -h localhost -t agromind/sensors -m '{"soil_moisture":35,"temperature":28.5,"humidity":72}'
+```
+Then check n8n → Executions → "Main CPS Loop" should show a new run.
+
+### Ollama Test
+```powershell
+Invoke-RestMethod -Uri "http://localhost:11434/api/generate" -Method POST -ContentType "application/json" -Body '{"model":"qwen2.5:14b","prompt":"Say one word: hello.","stream":false}'
+```
+
+### FastAPI Health Test
+```powershell
+Invoke-RestMethod http://localhost:8000/health
+```
+
+---
+
+## 🎓 Arduino IDE — Manual Setup
+1. Install from https://www.arduino.cc/en/software (Windows)
+2. **File → Preferences** → Additional Boards Manager URLs:
+   ```
+   https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+   ```
+3. **Tools → Boards Manager** → Search `esp32` → Install **esp32 by Espressif Systems**
+4. **Tools → Manage Libraries**:
+   - `DHT sensor library` by Adafruit
+   - `PubSubClient` by Nick O'Leary
+   - `ArduinoJson` by Benoit Blanchon
+
+---
+
+## 🚀 Expo Day Checklist (March 14)
+
+- [ ] Reboot PC once → verify pm2 auto-started all services
+- [ ] Run `check_ports.ps1` → all 6 PASS
+- [ ] Open n8n (5678), FastAPI Docs (8000/docs), Dashboard (5173)
+- [ ] Run MQTT publish test → confirm n8n execution fires
+- [ ] Check `C:\MyFiles\AgroMindAI\reports\` for today's report at 8AM
+- [ ] Plug in ESP32 → select correct COM port in Arduino IDE → upload sketch
+- [ ] Carry a phone hotspot as backup internet (for Open-Meteo weather API)

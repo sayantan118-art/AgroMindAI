@@ -1,0 +1,850 @@
+# AgroMind AI — Complete Local Dev Environment Setup Plan
+
+Full local setup for AgroMind AI on Windows 11. All services run locally, no cloud needed.
+
+---
+
+## Section 1 — n8n Installation & Configuration
+
+### Commands
+```powershell
+# Install n8n globally
+npm install -g n8n
+
+# Install pm2 globally (process manager for auto-start)
+npm install -g pm2
+npm install -g pm2-windows-startup
+
+# Set environment variables (add to Windows System Environment or .env)
+# Run these in PowerShell as one-time setup:
+[System.Environment]::SetEnvironmentVariable("N8N_PORT","5678","Machine")
+[System.Environment]::SetEnvironmentVariable("N8N_BASIC_AUTH_ACTIVE","false","Machine")
+[System.Environment]::SetEnvironmentVariable("WEBHOOK_URL","http://localhost:5678","Machine")
+
+# Start n8n via pm2
+pm2 start n8n --name agromind-n8n
+
+# Make pm2 survive reboots
+pm2-startup install
+pm2 save
+```
+
+> **Note**: `pm2-windows-startup` registers pm2 as a Windows startup task. After running `pm2-startup install`, close and reopen PowerShell, then run `pm2 save`.
+
+---
+
+## Section 2 — Mosquitto MQTT Broker
+
+### Install
+1. Download installer from: https://mosquitto.org/download/  
+   → Choose **Windows x64** `.exe` installer (v2.x)
+2. Run installer. Default path: `C:\Program Files\mosquitto\`
+
+### mosquitto.conf — Replace default config
+**File:** `C:\Program Files\mosquitto\mosquitto.conf`
+```conf
+listener 1883 localhost
+allow_anonymous true
+log_type all
+```
+
+### Start as Windows Service
+```powershell
+# Register as service (installer does this automatically)
+# If not, run:
+sc.exe create mosquitto binPath= "\"C:\Program Files\mosquitto\mosquitto.exe\" -c \"C:\Program Files\mosquitto\mosquitto.conf\"" start= auto
+net start mosquitto
+
+# Verify running
+netstat -ano | findstr :1883
+```
+
+---
+
+## Section 3 — FastAPI Backend
+
+### Directory & Virtual Environment
+```powershell
+mkdir C:\MyFiles\AgroMindAI\backend
+cd C:\MyFiles\AgroMindAI\backend
+python -m venv venv
+.\venv\Scripts\activate
+pip install fastapi uvicorn python-dotenv httpx paho-mqtt aiosqlite websockets requests
+```
+
+### requirements.txt
+**File:** `C:\MyFiles\AgroMindAI\backend\requirements.txt`
+```
+fastapi
+uvicorn[standard]
+python-dotenv
+httpx
+paho-mqtt
+aiosqlite
+websockets
+requests
+```
+
+### .env file
+**File:** `C:\MyFiles\AgroMindAI\backend\.env`
+```
+MQTT_BROKER=localhost
+MQTT_PORT=1883
+OLLAMA_URL=http://localhost:11434
+OLLAMA_MODEL=qwen2.5:14b
+OPEN_METEO_URL=https://api.open-meteo.com/v1/forecast
+DB_PATH=agromind.db
+LATITUDE=22.5726
+LONGITUDE=88.3639
+```
+
+### main.py (Full FastAPI App)
+**File:** `C:\MyFiles\AgroMindAI\backend\main.py`
+```python
+import os, json, asyncio, datetime
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+import aiosqlite, httpx
+from pydantic import BaseModel
+from dotenv import load_dotenv
+
+load_dotenv()
+
+app = FastAPI(title="AgroMind AI Backend")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], allow_credentials=True,
+    allow_methods=["*"], allow_headers=["*"],
+)
+
+DB_PATH = os.getenv("DB_PATH", "agromind.db")
+OPEN_METEO_URL = os.getenv("OPEN_METEO_URL")
+LAT = os.getenv("LATITUDE", "22.5726")
+LON = os.getenv("LONGITUDE", "88.3639")
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:14b")
+
+# Active WebSocket connections
+ws_clients: list[WebSocket] = []
+
+# ── DB init ──────────────────────────────────────────────────
+async def init_db():
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS sensor_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts TEXT DEFAULT (datetime('now')),
+                soil_moisture REAL,
+                temperature REAL,
+                humidity REAL,
+                rain_expected INTEGER,
+                decision TEXT,
+                reason TEXT,
+                health_score REAL,
+                next_check_minutes INTEGER
+            )
+        """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS pump_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts TEXT DEFAULT (datetime('now')),
+                action TEXT,
+                duration_sec INTEGER
+            )
+        """)
+        await db.commit()
+
+@app.on_event("startup")
+async def startup():
+    await init_db()
+
+# ── Models ────────────────────────────────────────────────────
+class SensorLog(BaseModel):
+    soil_moisture: float
+    temperature: float
+    humidity: float
+    rain_expected: bool
+    decision: str
+    reason: str
+    health_score: float
+    next_check_minutes: int
+
+class PumpAction(BaseModel):
+    action: str
+    duration_sec: int = 0
+
+# ── Endpoints ─────────────────────────────────────────────────
+@app.post("/sensor/log")
+async def log_sensor(data: SensorLog):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT INTO sensor_logs (soil_moisture,temperature,humidity,rain_expected,decision,reason,health_score,next_check_minutes) VALUES (?,?,?,?,?,?,?,?)",
+            (data.soil_moisture, data.temperature, data.humidity, int(data.rain_expected),
+             data.decision, data.reason, data.health_score, data.next_check_minutes)
+        )
+        await db.commit()
+    # Notify WebSocket clients
+    payload = data.model_dump()
+    for ws in ws_clients:
+        try: await ws.send_json(payload)
+        except: pass
+    return {"status": "logged"}
+
+@app.get("/sensor/latest")
+async def sensor_latest():
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cur = await db.execute("SELECT * FROM sensor_logs ORDER BY id DESC LIMIT 1")
+        row = await cur.fetchone()
+    return dict(row) if row else {}
+
+@app.get("/sensor/history")
+async def sensor_history(limit: int = 100):
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cur = await db.execute("SELECT * FROM sensor_logs ORDER BY id DESC LIMIT ?", (limit,))
+        rows = await cur.fetchall()
+    return [dict(r) for r in rows]
+
+@app.get("/weather/forecast")
+async def weather_forecast():
+    params = {
+        "latitude": LAT, "longitude": LON,
+        "hourly": "precipitation_probability,rain",
+        "forecast_days": 1, "timezone": "auto"
+    }
+    async with httpx.AsyncClient() as client:
+        r = await client.get(OPEN_METEO_URL, params=params, timeout=10)
+    data = r.json()
+    hourly = data.get("hourly", {})
+    rain_prob = hourly.get("precipitation_probability", [0])[0]
+    return {"rain_probability_next_hour": rain_prob, "rain_expected": rain_prob > 50}
+
+@app.get("/pump/usage/today")
+async def pump_usage_today():
+    today = datetime.date.today().isoformat()
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cur = await db.execute(
+            "SELECT * FROM pump_log WHERE ts LIKE ? ORDER BY id DESC", (f"{today}%",)
+        )
+        rows = await cur.fetchall()
+    total_on_sec = sum(r["duration_sec"] for r in rows if r["action"] == "ON")
+    return {"date": today, "total_on_seconds": total_on_sec, "events": [dict(r) for r in rows]}
+
+@app.post("/pump/log")
+async def log_pump(action: PumpAction):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("INSERT INTO pump_log (action, duration_sec) VALUES (?,?)",
+                         (action.action, action.duration_sec))
+        await db.commit()
+    return {"status": "logged"}
+
+# ── WebSocket ─────────────────────────────────────────────────
+@app.websocket("/ws/dashboard")
+async def ws_dashboard(websocket: WebSocket):
+    await websocket.accept()
+    ws_clients.append(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        ws_clients.remove(websocket)
+
+# ── Health check ──────────────────────────────────────────────
+@app.get("/health")
+async def health():
+    return {"status": "ok", "service": "AgroMind Backend"}
+```
+
+### Start FastAPI (dev)
+```powershell
+cd C:\MyFiles\AgroMindAI\backend
+.\venv\Scripts\activate
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+---
+
+## Section 4 — React Dashboard
+
+### Init project
+```powershell
+mkdir C:\MyFiles\AgroMindAI\dashboard
+cd C:\MyFiles\AgroMindAI\dashboard
+npm create vite@latest . -- --template react
+npm install
+npm install -D tailwindcss postcss autoprefixer
+npx tailwindcss init -p
+npm install recharts lucide-react
+```
+
+### tailwind.config.js
+**File:** `C:\MyFiles\AgroMindAI\dashboard\tailwind.config.js`
+```js
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
+  theme: { extend: {} },
+  plugins: [],
+}
+```
+
+### src/index.css — Add Tailwind directives at top
+```css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+```
+
+### vite.config.js — Add API proxy
+**File:** `C:\MyFiles\AgroMindAI\dashboard\vite.config.js`
+```js
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    port: 5173,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      }
+    }
+  }
+})
+```
+
+### Start dev server
+```powershell
+cd C:\MyFiles\AgroMindAI\dashboard
+npm run dev
+```
+
+---
+
+## Section 5 — Arduino IDE Setup
+
+### Steps
+1. Download Arduino IDE 2.x from https://www.arduino.cc/en/software  
+   Install for Windows.
+
+2. **Add ESP32 Board Support URL:**  
+   File → Preferences → Additional Boards Manager URLs:  
+   ```
+   https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+   ```
+
+3. **Install ESP32 Board Package:**  
+   Tools → Board → Boards Manager → Search "esp32" → Install **"esp32 by Espressif Systems"**
+
+4. **Install Libraries:**  
+   Tools → Manage Libraries:
+   - Search **"DHT sensor library"** → Install **by Adafruit** (also install Adafruit Unified Sensor when prompted)
+   - Search **"PubSubClient"** → Install **by Nick O'Leary**
+   - Search **"ArduinoJson"** → Install **by Benoit Blanchon**
+
+---
+
+## Section 6 — n8n Workflow JSONs
+
+> Import each JSON below via n8n UI: **Workflows → Import from file/clipboard**
+
+### Workflow 1 — Main CPS Loop
+```json
+{
+  "name": "AgroMind - Main CPS Loop",
+  "nodes": [
+    {
+      "parameters": {
+        "topic": "agromind/sensors",
+        "options": {}
+      },
+      "id": "mqtt-trigger",
+      "name": "MQTT Trigger",
+      "type": "n8n-nodes-base.mqttTrigger",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "credentials": {
+        "mqtt": { "id": "mqtt-cred", "name": "Mosquitto Local" }
+      }
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:8000/weather/forecast",
+        "options": {}
+      },
+      "id": "get-weather",
+      "name": "Get Weather Forecast",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:11434/api/generate",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "model", "value": "qwen2.5:14b" },
+            { "name": "stream", "value": false },
+            {
+              "name": "prompt",
+              "value": "=You are an agricultural AI assistant. Analyze sensor data and return ONLY valid JSON.\n\nSensor Data:\n- Soil Moisture: {{ $('MQTT Trigger').item.json.soil_moisture }}%\n- Temperature: {{ $('MQTT Trigger').item.json.temperature }}°C\n- Humidity: {{ $('MQTT Trigger').item.json.humidity }}%\n- Rain Expected: {{ $('Get Weather Forecast').item.json.rain_expected }}\n- Rain Probability: {{ $('Get Weather Forecast').item.json.rain_probability_next_hour }}%\n\nDecide whether to irrigate. Return ONLY this JSON:\n{\"decision\": \"IRRIGATE\" or \"SKIP\", \"reason\": \"one sentence\", \"health_score\": 0-100, \"next_check_minutes\": 15-60}"
+            }
+          ]
+        }
+      },
+      "id": "ollama-decide",
+      "name": "Ollama Decision",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [750, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.item.json.response;\nconst match = raw.match(/\\{[\\s\\S]*\\}/);\nif (!match) throw new Error('No JSON in Ollama response');\nconst parsed = JSON.parse(match[0]);\nparsed.next_check_minutes = Math.min(parsed.next_check_minutes || 15, 3);\nreturn [{ json: { ...parsed, ...$('MQTT Trigger').item.json } }];"
+      },
+      "id": "parse-decision",
+      "name": "Parse Decision JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1000, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [{ "value1": "={{ $json.decision }}", "value2": "IRRIGATE" }]
+        }
+      },
+      "id": "if-irrigate",
+      "name": "IF Irrigate?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "topic": "agromind/pump",
+        "message": "ON",
+        "options": {}
+      },
+      "id": "pump-on",
+      "name": "Pump ON",
+      "type": "n8n-nodes-base.mqtt",
+      "typeVersion": 1,
+      "position": [1500, 200],
+      "credentials": {
+        "mqtt": { "id": "mqtt-cred", "name": "Mosquitto Local" }
+      }
+    },
+    {
+      "parameters": {
+        "amount": "={{ $json.next_check_minutes }}",
+        "unit": "minutes"
+      },
+      "id": "wait",
+      "name": "Wait",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [1750, 200]
+    },
+    {
+      "parameters": {
+        "topic": "agromind/pump",
+        "message": "OFF",
+        "options": {}
+      },
+      "id": "pump-off",
+      "name": "Pump OFF",
+      "type": "n8n-nodes-base.mqtt",
+      "typeVersion": 1,
+      "position": [2000, 200],
+      "credentials": {
+        "mqtt": { "id": "mqtt-cred", "name": "Mosquitto Local" }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:8000/sensor/log",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "soil_moisture", "value": "={{ $('MQTT Trigger').item.json.soil_moisture }}" },
+            { "name": "temperature", "value": "={{ $('MQTT Trigger').item.json.temperature }}" },
+            { "name": "humidity", "value": "={{ $('MQTT Trigger').item.json.humidity }}" },
+            { "name": "rain_expected", "value": "={{ $('Get Weather Forecast').item.json.rain_expected }}" },
+            { "name": "decision", "value": "={{ $('Parse Decision JSON').item.json.decision }}" },
+            { "name": "reason", "value": "={{ $('Parse Decision JSON').item.json.reason }}" },
+            { "name": "health_score", "value": "={{ $('Parse Decision JSON').item.json.health_score }}" },
+            { "name": "next_check_minutes", "value": "={{ $('Parse Decision JSON').item.json.next_check_minutes }}" }
+          ]
+        }
+      },
+      "id": "log-sensor",
+      "name": "Log to SQLite",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1500, 450]
+    }
+  ],
+  "connections": {
+    "MQTT Trigger": { "main": [[{ "node": "Get Weather Forecast", "type": "main", "index": 0 }]] },
+    "Get Weather Forecast": { "main": [[{ "node": "Ollama Decision", "type": "main", "index": 0 }]] },
+    "Ollama Decision": { "main": [[{ "node": "Parse Decision JSON", "type": "main", "index": 0 }]] },
+    "Parse Decision JSON": { "main": [[{ "node": "IF Irrigate?", "type": "main", "index": 0 }]] },
+    "IF Irrigate?": {
+      "main": [
+        [{ "node": "Pump ON", "type": "main", "index": 0 }],
+        [{ "node": "Log to SQLite", "type": "main", "index": 0 }]
+      ]
+    },
+    "Pump ON": { "main": [[{ "node": "Wait", "type": "main", "index": 0 }]] },
+    "Wait": { "main": [[{ "node": "Pump OFF", "type": "main", "index": 0 }]] },
+    "Pump OFF": { "main": [[{ "node": "Log to SQLite", "type": "main", "index": 0 }]] }
+  },
+  "active": true,
+  "settings": {},
+  "tags": []
+}
+```
+
+### Workflow 2 — Health Monitor
+```json
+{
+  "name": "AgroMind - Health Monitor",
+  "nodes": [
+    {
+      "parameters": { "rule": { "interval": [{ "field": "minutes", "minutesInterval": 30 }] } },
+      "id": "cron-health",
+      "name": "Every 30 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:8000/sensor/latest",
+        "options": {}
+      },
+      "id": "get-latest",
+      "name": "Get Latest Sensor",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [{ "value1": "={{ $json.soil_moisture }}", "operation": "smaller", "value2": 20 }],
+          "boolean": [{ "value1": "={{ $json.rain_expected }}", "value2": false }]
+        },
+        "combineOperation": "all"
+      },
+      "id": "if-dry",
+      "name": "IF Dry & No Rain?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [750, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:11434/api/generate",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "model", "value": "qwen2.5:14b" },
+            { "name": "stream", "value": false },
+            { "name": "prompt", "value": "=Diagnose crop health. Soil moisture is critically low at {{ $('Get Latest Sensor').item.json.soil_moisture }}%. Temperature: {{ $('Get Latest Sensor').item.json.temperature }}°C. No rain expected. Give a brief 2-sentence diagnosis and urgent action." }
+          ]
+        }
+      },
+      "id": "ollama-diagnose",
+      "name": "Crop Diagnosis",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1000, 200]
+    },
+    {
+      "parameters": {
+        "command": "=powershell -Command \"Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.MessageBox]::Show('{{ $json.response.replace(/'/g, '') }}', 'AgroMind Alert', 'OK', 'Warning')\""
+      },
+      "id": "notify",
+      "name": "Desktop Notification",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [1250, 200]
+    }
+  ],
+  "connections": {
+    "Every 30 Minutes": { "main": [[{ "node": "Get Latest Sensor", "type": "main", "index": 0 }]] },
+    "Get Latest Sensor": { "main": [[{ "node": "IF Dry & No Rain?", "type": "main", "index": 0 }]] },
+    "IF Dry & No Rain?": { "main": [[{ "node": "Crop Diagnosis", "type": "main", "index": 0 }]] },
+    "Crop Diagnosis": { "main": [[{ "node": "Desktop Notification", "type": "main", "index": 0 }]] }
+  },
+  "active": true,
+  "settings": {},
+  "tags": []
+}
+```
+
+### Workflow 3 — Daily Farm Report
+```json
+{
+  "name": "AgroMind - Daily Farm Report",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "0 8 * * *" }]
+        }
+      },
+      "id": "cron-daily",
+      "name": "Daily 8AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": { "url": "http://localhost:8000/sensor/history", "options": {} },
+      "id": "get-history",
+      "name": "Get 24h History",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [500, 300]
+    },
+    {
+      "parameters": { "url": "http://localhost:8000/pump/usage/today", "options": {} },
+      "id": "get-pump",
+      "name": "Get Pump Usage",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [500, 450]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:11434/api/generate",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "model", "value": "qwen2.5:14b" },
+            { "name": "stream", "value": false },
+            { "name": "prompt", "value": "=You are an agricultural assistant. Write a plain English daily farm report for a small farmer based on this data:\n\n24h sensor readings (latest 10): {{ JSON.stringify($('Get 24h History').item.json.slice(0,10)) }}\n\nPump usage today: {{ $('Get Pump Usage').item.json.total_on_seconds }} seconds total runtime.\n\nWrite 3-4 sentences summarizing soil health, irrigation activity, and any recommendations." }
+          ]
+        }
+      },
+      "id": "ollama-report",
+      "name": "Generate Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [750, 375]
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "=C:\\MyFiles\\AgroMindAI\\reports\\report_{{ $now.toFormat('yyyy-MM-dd') }}.txt",
+        "text": "={{ $json.response }}"
+      },
+      "id": "save-report",
+      "name": "Save Report",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [1000, 375]
+    }
+  ],
+  "connections": {
+    "Daily 8AM": {
+      "main": [
+        [{ "node": "Get 24h History", "type": "main", "index": 0 }],
+        [{ "node": "Get Pump Usage", "type": "main", "index": 0 }]
+      ]
+    },
+    "Get 24h History": { "main": [[{ "node": "Generate Report", "type": "main", "index": 0 }]] },
+    "Get Pump Usage": { "main": [[{ "node": "Generate Report", "type": "main", "index": 0 }]] },
+    "Generate Report": { "main": [[{ "node": "Save Report", "type": "main", "index": 0 }]] }
+  },
+  "active": true,
+  "settings": {},
+  "tags": []
+}
+```
+
+### Workflow 4 — AnythingLLM Context Sync
+```json
+{
+  "name": "AgroMind - AnythingLLM Sync",
+  "nodes": [
+    {
+      "parameters": { "rule": { "interval": [{ "field": "minutes", "minutesInterval": 15 }] } },
+      "id": "cron-sync",
+      "name": "Every 15 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": { "url": "http://localhost:8000/sensor/latest", "options": {} },
+      "id": "get-latest-sync",
+      "name": "Get Latest Sensor",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3001/api/v1/workspace/agromind/chat",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer YOUR_ANYTHINGLLM_API_KEY" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "message", "value": "Update: Soil={{ $json.soil_moisture }}%, Temp={{ $json.temperature }}°C, Decision={{ $json.decision }}" },
+            { "name": "mode", "value": "chat" }
+          ]
+        }
+      },
+      "id": "anythingllm-sync",
+      "name": "Update AnythingLLM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [750, 300]
+    }
+  ],
+  "connections": {
+    "Every 15 Minutes": { "main": [[{ "node": "Get Latest Sensor", "type": "main", "index": 0 }]] },
+    "Get Latest Sensor": { "main": [[{ "node": "Update AnythingLLM", "type": "main", "index": 0 }]] }
+  },
+  "active": true,
+  "settings": {},
+  "tags": []
+}
+```
+
+> **Replace** `YOUR_ANYTHINGLLM_API_KEY` with your actual key from AnythingLLM Settings → API.
+
+---
+
+## Section 7 — Verification Checks
+
+### Port check script
+Save as `C:\MyFiles\AgroMindAI\check_ports.ps1` and run in PowerShell:
+```powershell
+function Check-Port($name, $port) {
+    $result = Test-NetConnection -ComputerName localhost -Port $port -WarningAction SilentlyContinue
+    if ($result.TcpTestSucceeded) { Write-Host "PASS  $name (port $port)" -ForegroundColor Green }
+    else { Write-Host "FAIL  $name (port $port)" -ForegroundColor Red }
+}
+
+Check-Port "Mosquitto MQTT"     1883
+Check-Port "FastAPI Backend"    8000
+Check-Port "n8n"                5678
+Check-Port "AnythingLLM"        3001
+Check-Port "Ollama"             11434
+Check-Port "React Dashboard"    5173
+```
+
+### MQTT publish test
+```powershell
+# Install mosquitto_pub is included with Mosquitto
+# Publish test sensor reading:
+& "C:\Program Files\mosquitto\mosquitto_pub.exe" -h localhost -t agromind/sensors -m '{"soil_moisture":35,"temperature":28.5,"humidity":72}'
+```
+
+### Ollama test
+```powershell
+curl -X POST http://localhost:11434/api/generate -H "Content-Type: application/json" -d "{\"model\":\"qwen2.5:14b\",\"prompt\":\"Say hello in one word.\",\"stream\":false}"
+```
+
+### End-to-end test
+1. Start all services (see Section 8)
+2. Run the MQTT publish test above
+3. Open n8n → check "Main CPS Loop" workflow execution log
+4. Check FastAPI: `curl http://localhost:8000/sensor/latest`
+5. Verify decision appears and pump command was sent to `agromind/pump`
+
+---
+
+## Section 8 — Auto-Start (pm2 ecosystem)
+
+### Create pm2 ecosystem config
+**File:** `C:\MyFiles\AgroMindAI\ecosystem.config.js`
+```js
+module.exports = {
+  apps: [
+    {
+      name: "agromind-n8n",
+      script: "n8n",
+      interpreter: "none",
+      env: {
+        N8N_PORT: "5678",
+        N8N_BASIC_AUTH_ACTIVE: "false",
+        WEBHOOK_URL: "http://localhost:5678"
+      }
+    },
+    {
+      name: "agromind-backend",
+      cwd: "C:\\MyFiles\\AgroMindAI\\backend",
+      script: "C:\\MyFiles\\AgroMindAI\\backend\\venv\\Scripts\\uvicorn.exe",
+      args: "main:app --host 0.0.0.0 --port 8000",
+      interpreter: "none"
+    },
+    {
+      name: "agromind-dashboard",
+      cwd: "C:\\MyFiles\\AgroMindAI\\dashboard",
+      script: "npm",
+      args: "run preview -- --port 5173",
+      interpreter: "none"
+    }
+  ]
+}
+```
+
+### Start and save with pm2
+```powershell
+# Start all services
+pm2 start C:\MyFiles\AgroMindAI\ecosystem.config.js
+
+# Register pm2 for Windows startup
+pm2-startup install
+pm2 save
+
+# Check all running
+pm2 list
+```
+
+> **Note for expo day**: Before the expo, run `pm2 start C:\MyFiles\AgroMindAI\ecosystem.config.js` once, then `pm2 save`. After that, everything starts on boot automatically. Mosquitto starts automatically as a Windows service.
+
+---
+
+## Reports Directory
+```powershell
+mkdir C:\MyFiles\AgroMindAI\reports
+```
+
+---
+
+## Verification Plan
+
+### Automated (PowerShell)
+Run `C:\MyFiles\AgroMindAI\check_ports.ps1` — all 6 ports should show PASS.
+
+### Manual
+1. Open http://localhost:5678 → n8n dashboard loads
+2. Open http://localhost:8000/docs → FastAPI Swagger UI loads
+3. Open http://localhost:5173 → React dashboard loads
+4. Run MQTT publish test → n8n workflow execution appears in runs list
+5. Run Ollama test → JSON response with `response` field returned
