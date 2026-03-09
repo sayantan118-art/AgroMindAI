@@ -1,380 +1,316 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
+} from 'recharts'
+import { Droplets, Thermometer, Wind, Sun, CloudRain, Zap, Activity } from 'lucide-react'
 import './App.css'
 
-// Utility: Format number to 1 decimal place
-const formatDecimal = (num) => parseFloat(num).toFixed(1)
+const API_BASE = 'https://columbus-unacidulated-alvina.ngrok-free.app'
+const WS_BASE = 'wss://columbus-unacidulated-alvina.ngrok-free.app'
 
-// Utility: Convert polar to cartesian coordinates for 270-degree speedometer
-const polarToCartesian = (centerX, centerY, radius, angleInDegrees) => {
-  const angleInRadians = (angleInDegrees * Math.PI) / 180.0
-  return {
-    x: centerX + (radius * Math.cos(angleInRadians)),
-    y: centerY + (radius * Math.sin(angleInRadians))
-  }
+// ─── Mock / fallback data ────────────────────────────────────────────────────
+const MOCK = {
+  soil_moisture: 45,
+  temperature: 28,
+  humidity: 65,
+  light: 2048,
+  rain_detected: false,
+  decision: 'DELAY',
+  reason: 'Soil moisture adequate. Checking forecast.',
+  health_score: 72,
+  next_check_minutes: 15,
 }
 
-// Utility: Create SVG arc path for 270-degree speedometer
-const describeArc = (x, y, radius, startAngle, endAngle) => {
-  const start = polarToCartesian(x, y, radius, startAngle)
-  const end = polarToCartesian(x, y, radius, endAngle)
-  const arcSweep = endAngle - startAngle
-  const largeArcFlag = arcSweep > 180 ? "1" : "0"
-  return [
-    "M", start.x, start.y,
-    "A", radius, radius, 0, largeArcFlag, 1, end.x, end.y
-  ].join(" ")
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+function soilColor(v) {
+  if (v < 30) return '#ef4444'
+  if (v < 60) return '#eab308'
+  return '#22c55e'
+}
+function healthColor(s) {
+  if (s < 40) return '#ef4444'
+  if (s < 70) return '#eab308'
+  return '#22c55e'
+}
+function decisionColor(d) {
+  if (d === 'IRRIGATE') return '#22c55e'
+  if (d === 'SKIP') return '#3b82f6'
+  return '#eab308'
+}
+function fmt(val, decimals = 1) {
+  return typeof val === 'number' ? val.toFixed(decimals) : '—'
 }
 
-// Utility: Get health color
-const getHealthColor = (score) => {
-  if (score < 30) return '#ef4444' // red
-  if (score < 70) return '#eab308' // yellow
-  return '#22c55e' // green
-}
-
-// Utility: Calculate trend arrow
-const calculateTrendArrow = (current, previous) => {
-  if (previous === null || previous === undefined) return '→'
-  const diff = current - previous
-  if (diff > 2) return '↑'
-  if (diff < -2) return '↓'
-  return '→'
-}
-
-// Component: Health Gauge (270-degree speedometer)
-const HealthGauge = ({ healthScore, size = 200 }) => {
-  const score = parseFloat(healthScore).toFixed(1)
-  const centerX = size / 2
-  const centerY = size / 2
-  const radius = (size / 2) - 20
-  
-  // 270-degree speedometer: starts at 135° and sweeps 270° clockwise
-  const startAngle = 135
-  const totalDegrees = 270
-  
-  // Calculate fill angle based on score
-  const fillDegrees = (parseFloat(healthScore) / 100) * totalDegrees
-  const endAngle = startAngle + fillDegrees
-  
-  const backgroundPath = describeArc(centerX, centerY, radius, startAngle, startAngle + totalDegrees)
-  const foregroundPath = describeArc(centerX, centerY, radius, startAngle, endAngle)
-  const color = getHealthColor(parseFloat(healthScore))
-  
+// ─── SensorCard ───────────────────────────────────────────────────────────────
+function SensorCard({ icon: Icon, label, value, unit, color }) {
   return (
-    <div className="health-gauge">
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-        {/* Background arc */}
-        <path
-          d={backgroundPath}
-          fill="none"
-          stroke="#e5e7eb"
-          strokeWidth="20"
-          strokeLinecap="round"
-        />
-        {/* Foreground arc */}
-        <path
-          d={foregroundPath}
+    <div className="sensor-card" style={{ borderColor: color + '44' }}>
+      <div className="sensor-icon" style={{ color }}>
+        <Icon size={28} />
+      </div>
+      <div className="sensor-value" style={{ color }}>{value}<span className="sensor-unit">{unit}</span></div>
+      <div className="sensor-label">{label}</div>
+    </div>
+  )
+}
+
+// ─── HealthGauge ─────────────────────────────────────────────────────────────
+function HealthGauge({ score }) {
+  const r = 70
+  const circ = 2 * Math.PI * r
+  const val = Math.min(100, Math.max(0, score || 0))
+  const arc = (val / 100) * circ
+  const color = healthColor(val)
+  return (
+    <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+      <div className="card-title">Crop Health Score</div>
+      <svg width="180" height="180" viewBox="0 0 180 180">
+        <circle cx="90" cy="90" r={r} fill="none" stroke="#1e293b" strokeWidth="14" />
+        <circle
+          cx="90" cy="90" r={r}
           fill="none"
           stroke={color}
-          strokeWidth="20"
+          strokeWidth="14"
           strokeLinecap="round"
-          style={{ transition: 'all 0.5s ease-out' }}
+          strokeDasharray={`${arc} ${circ}`}
+          strokeDashoffset={circ * 0.25}
+          style={{ transition: 'stroke-dasharray 0.6s ease, stroke 0.4s ease' }}
         />
-        {/* Center text */}
-        <text
-          x={centerX}
-          y={centerY}
-          textAnchor="middle"
-          dominantBaseline="middle"
-          className="gauge-text"
-          fill={color}
-        >
-          {score}%
-        </text>
+        <text x="90" y="85" textAnchor="middle" fill={color} fontSize="32" fontWeight="700">{val}</text>
+        <text x="90" y="108" textAnchor="middle" fill="#64748b" fontSize="13">/ 100</text>
       </svg>
+      <div style={{ color, fontWeight: 600, fontSize: 14 }}>
+        {val >= 70 ? 'Healthy' : val >= 40 ? 'Moderate' : 'Critical'}
+      </div>
     </div>
   )
 }
 
-// Custom Hook: Weather Forecast
-const useWeatherForecast = () => {
-  const [weather, setWeather] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  
-  const fetchWeather = async () => {
-    try {
-      const response = await fetch('https://communicate-readers-panel-judge.trycloudflare.com/weather/forecast')
-      if (!response.ok) throw new Error('Weather API error')
-      const data = await response.json()
-      setWeather(data)
-      setError(null)
-    } catch (err) {
-      setError(err.message)
-      setWeather({ rain_probability_next_hour: 0, rain_expected: false, error: err.message })
-    } finally {
-      setLoading(false)
-    }
-  }
-  
+// ─── AIDecisionPanel ──────────────────────────────────────────────────────────
+function AIDecisionPanel({ decision, reason, nextCheckMinutes }) {
+  const [seconds, setSeconds] = useState(nextCheckMinutes * 60)
   useEffect(() => {
-    fetchWeather()
-    const interval = setInterval(fetchWeather, 15 * 60 * 1000) // 15 minutes
-    return () => clearInterval(interval)
+    setSeconds(nextCheckMinutes * 60)
+  }, [nextCheckMinutes])
+  useEffect(() => {
+    const t = setInterval(() => setSeconds(s => Math.max(0, s - 1)), 1000)
+    return () => clearInterval(t)
   }, [])
-  
-  return { weather, loading, error }
+  const mm = String(Math.floor(seconds / 60)).padStart(2, '0')
+  const ss = String(seconds % 60).padStart(2, '0')
+  const color = decisionColor(decision)
+
+  return (
+    <div className="card" style={{ flex: 1 }}>
+      <div className="card-title">AI Decision</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+        <span style={{
+          background: color + '22', color, border: `1px solid ${color}55`,
+          borderRadius: 8, padding: '6px 18px', fontWeight: 700, fontSize: 18, letterSpacing: 1
+        }}>{decision || '—'}</span>
+      </div>
+      <div style={{ color: '#cbd5e1', fontSize: 14, lineHeight: 1.6, marginBottom: 20, minHeight: 40 }}>
+        {reason || 'Awaiting sensor data...'}
+      </div>
+      <div style={{ borderTop: '1px solid #334155', paddingTop: 16 }}>
+        <div style={{ color: '#64748b', fontSize: 12, marginBottom: 4 }}>Next check in</div>
+        <div style={{ color: '#22c55e', fontFamily: 'monospace', fontSize: 28, fontWeight: 700 }}>
+          {mm}:{ss}
+        </div>
+      </div>
+    </div>
+  )
 }
 
-// Custom Hook: Pump Usage
-const usePumpUsage = () => {
-  const [usage, setUsage] = useState(null)
-  const [loading, setLoading] = useState(true)
-  
-  const fetchUsage = async () => {
-    try {
-      const response = await fetch('https://communicate-readers-panel-judge.trycloudflare.com/pump/usage/today')
-      if (!response.ok) throw new Error('Pump usage API error')
-      const data = await response.json()
-      setUsage(data)
-    } catch (err) {
-      console.error('Pump usage fetch error:', err)
-      setUsage({ total_on_seconds: 0 })
-    } finally {
-      setLoading(false)
-    }
-  }
-  
-  useEffect(() => {
-    fetchUsage()
-    const interval = setInterval(fetchUsage, 30 * 1000) // 30 seconds
-    return () => clearInterval(interval)
-  }, [])
-  
-  return { usage, loading }
+// ─── MoistureChart ────────────────────────────────────────────────────────────
+function MoistureChart({ history }) {
+  const data = history.map((d, i) => ({
+    name: d.ts ? d.ts.slice(11, 16) : `#${i + 1}`,
+    moisture: d.soil_moisture,
+    temp: d.temperature,
+  }))
+
+  return (
+    <div className="card" style={{ width: '100%' }}>
+      <div className="card-title">Soil Moisture History (last 20 readings)</div>
+      <ResponsiveContainer width="100%" height={200}>
+        <LineChart data={data} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+          <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 11 }} />
+          <YAxis domain={[0, 100]} tick={{ fill: '#64748b', fontSize: 11 }} unit="%" />
+          <Tooltip
+            contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#e2e8f0' }}
+            labelStyle={{ color: '#94a3b8' }}
+          />
+          <Line
+            type="monotone" dataKey="moisture"
+            stroke="#22c55e" strokeWidth={2.5}
+            dot={{ r: 3, fill: '#22c55e' }}
+            activeDot={{ r: 5 }}
+            name="Moisture %"
+          />
+          <Line
+            type="monotone" dataKey="temp"
+            stroke="#f97316" strokeWidth={2}
+            dot={false}
+            name="Temp °C"
+            strokeDasharray="4 2"
+          />
+        </LineChart>
+      </ResponsiveContainer>
+      <div style={{ display: 'flex', gap: 20, marginTop: 8 }}>
+        <span style={{ color: '#22c55e', fontSize: 12 }}>● Soil Moisture %</span>
+        <span style={{ color: '#f97316', fontSize: 12 }}>-- Temperature °C</span>
+      </div>
+    </div>
+  )
 }
 
-// Custom Hook: WebSocket
-const useWebSocket = (url) => {
-  const [data, setData] = useState(null)
-  const [connected, setConnected] = useState(false)
-  const wsRef = useRef(null)
-  const reconnectTimeoutRef = useRef(null)
-  const reconnectDelayRef = useRef(1000)
-  
-  const connect = () => {
-    try {
-      const ws = new WebSocket(url)
-      
-      ws.onopen = () => {
-        console.log('WebSocket connected')
-        setConnected(true)
-        reconnectDelayRef.current = 1000 // Reset backoff
-      }
-      
-      ws.onmessage = (event) => {
-        try {
-          const message = JSON.parse(event.data)
-          setData(message)
-        } catch (err) {
-          console.error('WebSocket message parse error:', err)
-        }
-      }
-      
-      ws.onerror = (error) => {
-        console.error('WebSocket error:', error)
-      }
-      
-      ws.onclose = () => {
-        console.log('WebSocket disconnected')
-        setConnected(false)
-        
-        // Exponential backoff reconnection
-        reconnectTimeoutRef.current = setTimeout(() => {
-          console.log(`Reconnecting in ${reconnectDelayRef.current}ms...`)
-          reconnectDelayRef.current = Math.min(reconnectDelayRef.current * 2, 30000)
-          connect()
-        }, reconnectDelayRef.current)
-      }
-      
-      wsRef.current = ws
-    } catch (err) {
-      console.error('WebSocket connection error:', err)
-    }
-  }
-  
-  useEffect(() => {
-    connect()
-    
-    return () => {
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current)
-      }
-      if (wsRef.current) {
-        wsRef.current.close()
-      }
-    }
-  }, [url])
-  
-  return { data, connected }
-}
+// ─── PumpControl ──────────────────────────────────────────────────────────────
+function PumpControl() {
+  const [pumpOn, setPumpOn] = useState(false)
+  const [loading, setLoading] = useState(false)
 
-function App() {
-  const [sensorData, setSensorData] = useState(null)
-  const [previousMoisture, setPreviousMoisture] = useState(null)
-  const [pumpStatus, setPumpStatus] = useState('OFF')
-  
-  const { weather, loading: weatherLoading } = useWeatherForecast()
-  const { usage, loading: usageLoading } = usePumpUsage()
-  const { data: wsData, connected } = useWebSocket('wss://communicate-readers-panel-judge.trycloudflare.com/ws/dashboard')
-  
-  // Fetch initial sensor data
-  useEffect(() => {
-    const fetchInitialData = async () => {
-      try {
-        const response = await fetch('https://communicate-readers-panel-judge.trycloudflare.com/sensor/latest')
-        if (response.ok) {
-          const data = await response.json()
-          setSensorData(data)
-        }
-      } catch (err) {
-        console.error('Initial data fetch error:', err)
-      }
-    }
-    
-    fetchInitialData()
-  }, [])
-  
-  // Update from WebSocket
-  useEffect(() => {
-    if (wsData) {
-      setPreviousMoisture(sensorData?.soil_moisture || null)
-      setSensorData(wsData)
-    }
-  }, [wsData])
-  
-  // Toggle pump
-  const togglePump = async () => {
+  async function togglePump() {
+    setLoading(true)
+    const next = !pumpOn
     try {
-      const newStatus = pumpStatus === 'ON' ? 'OFF' : 'ON'
-      const response = await fetch('https://communicate-readers-panel-judge.trycloudflare.com/pump/control', {
+      await fetch(`${API_BASE}/pump/log`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: newStatus })
+        body: JSON.stringify({ action: next ? 'ON' : 'OFF', duration_sec: 0 })
       })
-      
-      if (response.ok) {
-        setPumpStatus(newStatus)
-      }
-    } catch (err) {
-      console.error('Pump control error:', err)
+      setPumpOn(next)
+    } catch {
+      // backend unavailable – still toggle UI for demo
+      setPumpOn(next)
+    } finally {
+      setLoading(false)
     }
   }
-  
-  if (!sensorData) {
-    return (
-      <div className="loading-container">
-        <div className="loading-spinner"></div>
-        <p>Loading dashboard...</p>
-      </div>
-    )
-  }
-  
-  const moistureTrend = calculateTrendArrow(sensorData.soil_moisture, previousMoisture)
-  const isLowMoisture = sensorData.soil_moisture < 30
-  const pumpMinutes = usage ? Math.round(usage.total_on_seconds / 60) : 0
-  
+
   return (
-    <div className="dashboard">
-      <header className="dashboard-header">
-        <h1>🌱 AgroMind AI Dashboard</h1>
-        <div className="connection-status">
-          <span className={`status-dot ${connected ? 'connected' : 'demo-mode'}`}></span>
-          <span>{connected ? 'Connected' : 'Offline - Mock Data'}</span>
-        </div>
-      </header>
-      
-      <div className="dashboard-grid">
-        {/* Health Gauge */}
-        <div className="card health-card">
-          <h2>Crop Health</h2>
-          <HealthGauge healthScore={sensorData.health_score} size={200} />
-        </div>
-        
-        {/* AI Decision Panel */}
-        <div className="card ai-panel">
-          <h2>🤖 AI Decision</h2>
-          <div className="decision-content">
-            <p className="decision-text">{sensorData.decision}</p>
-            <p className="reason-text">{sensorData.reason}</p>
-            <p className="next-check">Next check: {sensorData.next_check_minutes} minutes</p>
-            
-            {/* Weather Forecast */}
-            <div className="weather-section">
-              {weatherLoading ? (
-                <p className="weather-loading">Loading weather...</p>
-              ) : weather?.error ? (
-                <p className="weather-error">Weather data unavailable</p>
-              ) : weather ? (
-                <p className="weather-info">
-                  🌧️ Rain probability: {parseFloat(weather.rain_probability_next_hour).toFixed(1)}% next hour
-                </p>
-              ) : null}
-            </div>
-          </div>
-        </div>
-        
-        {/* Soil Moisture Card */}
-        <div className={`card moisture-card ${isLowMoisture ? 'moisture-alert' : ''}`}>
-          <h2>💧 Soil Moisture</h2>
-          <div className="moisture-content">
-            <p className="moisture-value">
-              {parseFloat(sensorData.soil_moisture).toFixed(1)}% <span className="trend-arrow">{moistureTrend}</span>
-            </p>
-            {isLowMoisture && (
-              <p className="alert-text">⚠️ Low moisture alert</p>
-            )}
-          </div>
-        </div>
-        
-        {/* Temperature Card */}
-        <div className="card">
-          <h2>🌡️ Temperature</h2>
-          <p className="sensor-value">{parseFloat(sensorData.temperature).toFixed(1)}°C</p>
-        </div>
-        
-        {/* Humidity Card */}
-        <div className="card">
-          <h2>💨 Humidity</h2>
-          <p className="sensor-value">{parseFloat(sensorData.humidity).toFixed(1)}%</p>
-        </div>
-        
-        {/* Pump Control */}
-        <div className="card pump-card">
-          <h2>⚙️ Pump Control</h2>
-          <button 
-            className={`pump-button ${pumpStatus === 'ON' ? 'pump-on' : 'pump-off'}`}
-            onClick={togglePump}
-          >
-            {pumpStatus === 'ON' ? '🟢 Pump ON' : '⚪ Pump OFF'}
-          </button>
-          
-          {/* Water Usage Counter */}
-          <div className="water-usage">
-            {usageLoading ? (
-              <p className="usage-loading">Loading...</p>
-            ) : (
-              <p className="usage-text">💧 Water used today: {pumpMinutes} minutes</p>
-            )}
-          </div>
-        </div>
-      </div>
-      
-      <footer className="dashboard-footer">
-        <p>Last updated: {new Date(sensorData.ts).toLocaleString()}</p>
-      </footer>
-    </div>
+    <button
+      className="pump-btn"
+      onClick={togglePump}
+      disabled={loading}
+      style={{
+        background: pumpOn ? '#22c55e22' : '#ef444422',
+        borderColor: pumpOn ? '#22c55e' : '#ef4444',
+        color: pumpOn ? '#22c55e' : '#ef4444',
+      }}
+      title="Toggle irrigation pump"
+      id="pump-toggle-btn"
+    >
+      <Zap size={20} style={{ marginBottom: 2 }} />
+      <span style={{ fontSize: 12, fontWeight: 700 }}>PUMP</span>
+      <span style={{ fontSize: 11 }}>{pumpOn ? 'ON' : 'OFF'}</span>
+    </button>
   )
 }
 
-export default App
+// ─── App ─────────────────────────────────────────────────────────────────────
+export default function App() {
+  const [data, setData] = useState(null)
+  const [history, setHistory] = useState([])
+  const [connected, setConnected] = useState(false)
+  const wsRef = useRef(null)
+
+  const fetchLatest = useCallback(async () => {
+    try {
+      const r = await fetch(`${API_BASE}/sensor/latest`)
+      if (r.ok) { const d = await r.json(); if (d && d.soil_moisture != null) setData(d) }
+    } catch { /* use mock */ }
+  }, [])
+
+  const fetchHistory = useCallback(async () => {
+    try {
+      const r = await fetch(`${API_BASE}/sensor/history?limit=20`)
+      if (r.ok) { const d = await r.json(); if (Array.isArray(d) && d.length) setHistory(d.slice(0, 20).reverse()) }
+    } catch { /* use mock */ }
+  }, [])
+
+  // WebSocket
+  useEffect(() => {
+    function connect() {
+      try {
+        const ws = new WebSocket(`${WS_BASE}/ws/dashboard`)
+        wsRef.current = ws
+        ws.onopen = () => setConnected(true)
+        ws.onmessage = (e) => { try { const d = JSON.parse(e.data); setData(d) } catch { } }
+        ws.onclose = () => { setConnected(false); setTimeout(connect, 3000) }
+        ws.onerror = () => ws.close()
+      } catch { }
+    }
+    connect()
+    return () => wsRef.current?.close()
+  }, [])
+
+  // Polling
+  useEffect(() => {
+    fetchLatest(); fetchHistory()
+    const a = setInterval(fetchLatest, 5000)
+    const b = setInterval(fetchHistory, 15000)
+    return () => { clearInterval(a); clearInterval(b) }
+  }, [fetchLatest, fetchHistory])
+
+  const d = data || MOCK
+
+  const soilC = soilColor(d.soil_moisture)
+
+  return (
+    <div className="app-root">
+      {/* ── Header ── */}
+      <header className="header">
+        <div className="header-title">
+          <span style={{ fontSize: 22 }}>🌱</span>
+          <span>AgroMind AI</span>
+        </div>
+        <div className="header-status">
+          <span className={`status-dot ${connected ? 'pulse-green' : 'pulse-red'}`}
+            style={{ background: connected ? '#22c55e' : '#ef4444' }} />
+          <span style={{ color: connected ? '#22c55e' : '#ef4444', fontWeight: 600 }}>
+            {connected ? 'System Online' : 'Offline — Mock Data'}
+          </span>
+        </div>
+      </header>
+
+      <main className="main-content">
+        {/* ── Sensor Cards ── */}
+        <div className="sensor-row">
+          <SensorCard icon={Droplets} label="Soil Moisture" value={fmt(d.soil_moisture, 0)} unit="%" color={soilC} />
+          <SensorCard icon={Thermometer} label="Temperature" value={fmt(d.temperature)} unit="°C" color="#f97316" />
+          <SensorCard icon={Wind} label="Humidity" value={fmt(d.humidity, 0)} unit="%" color="#38bdf8" />
+          <SensorCard icon={Sun} label="Light Level" value={d.light ?? '—'} unit=" lux" color="#facc15" />
+          <SensorCard
+            icon={d.rain_detected ? CloudRain : Sun}
+            label="Rain Status"
+            value={d.rain_detected ? 'Rain' : 'Clear'}
+            unit=""
+            color={d.rain_detected ? '#38bdf8' : '#facc15'}
+          />
+        </div>
+
+        {/* ── Middle row ── */}
+        <div className="middle-row">
+          <HealthGauge score={d.health_score} />
+          <AIDecisionPanel
+            decision={d.decision}
+            reason={d.reason}
+            nextCheckMinutes={d.next_check_minutes ?? 15}
+          />
+        </div>
+
+        {/* ── Chart ── */}
+        <MoistureChart history={history.length ? history : Array.from({ length: 8 }, (_, i) => ({
+          soil_moisture: MOCK.soil_moisture + (Math.random() * 20 - 10),
+          temperature: MOCK.temperature + (Math.random() * 4 - 2),
+          ts: `2026-03-05T${String(10 + i).padStart(2, '0')}:00`
+        }))} />
+      </main>
+
+      {/* ── Floating Pump ── */}
+      <PumpControl />
+    </div>
+  )
+}

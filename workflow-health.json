@@ -11,7 +11,7 @@
     },
     {
       "parameters": {
-        "url": "http://127.0.0.1:8000/sensor/latest",
+        "url": "http://localhost:8000/sensor/latest",
         "options": {}
       },
       "id": "get-latest",
@@ -37,11 +37,11 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://127.0.0.1:11434/api/generate",
+        "url": "http://localhost:11434/api/generate",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
-            { "name": "model", "value": "qwen2.5:7b" },
+            { "name": "model", "value": "qwen2.5:14b" },
             { "name": "stream", "value": false },
             { "name": "prompt", "value": "=Diagnose crop health. Soil moisture is critically low at {{ $('Get Latest Sensor').item.json.soil_moisture }}%. Temperature: {{ $('Get Latest Sensor').item.json.temperature }}°C. No rain expected. Give a brief 2-sentence diagnosis and urgent action." }
           ]

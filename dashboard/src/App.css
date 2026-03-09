@@ -1,339 +1,195 @@
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+/* ── Reset & Base ─────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #0f172a;
+  color: #e2e8f0;
+  font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
   min-height: 100vh;
+  display: block;
 }
 
-.dashboard {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 2rem;
+/* ── App Root ─────────────────────────────────────────────────────────────── */
+.app-root {
+  min-height: 100vh;
+  background: #0f172a;
+  padding-bottom: 90px;
 }
 
-.dashboard-header {
+/* ── Header ───────────────────────────────────────────────────────────────── */
+.header {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 2rem;
-  color: white;
+  padding: 16px 28px;
+  background: #1e293b;
+  border-bottom: 1px solid #334155;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 16px #0008;
 }
 
-.dashboard-header h1 {
-  font-size: 2.5rem;
-  font-weight: 700;
-}
-
-.connection-status {
+.header-title {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  background: rgba(255, 255, 255, 0.2);
-  padding: 0.5rem 1rem;
-  border-radius: 20px;
-  font-size: 0.9rem;
+  gap: 10px;
+  font-size: 20px;
+  font-weight: 700;
+  color: #f1f5f9;
+  letter-spacing: -0.3px;
 }
 
+.header-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+/* ── Pulsing dot ──────────────────────────────────────────────────────────── */
 .status-dot {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  animation: pulse 2s ease-in-out infinite;
+  display: inline-block;
 }
 
-.status-dot.connected {
-  background: #22c55e;
+.pulse-green {
+  animation: pulseGreen 2s infinite;
+}
+.pulse-red {
+  animation: pulseRed 2s infinite;
 }
 
-.status-dot.demo-mode {
-  background: #f59e0b;
+@keyframes pulseGreen {
+  0%, 100% { box-shadow: 0 0 0 0 #22c55e88; }
+  50%       { box-shadow: 0 0 0 6px #22c55e00; }
+}
+@keyframes pulseRed {
+  0%, 100% { box-shadow: 0 0 0 0 #ef444488; }
+  50%       { box-shadow: 0 0 0 6px #ef444400; }
 }
 
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
-  }
+/* ── Main Content ─────────────────────────────────────────────────────────── */
+.main-content {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 24px 24px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
-.dashboard-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 1.5rem;
-  margin-bottom: 2rem;
-}
-
+/* ── Card Base ────────────────────────────────────────────────────────────── */
 .card {
-  background: white;
+  background: #1e293b;
+  border: 1px solid #334155;
   border-radius: 16px;
-  padding: 1.5rem;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  transition: transform 0.2s, box-shadow 0.2s;
+  padding: 20px 22px;
+  box-shadow: 0 4px 24px #0005;
+  transition: box-shadow 0.2s;
 }
+.card:hover { box-shadow: 0 8px 32px #0008; }
 
-.card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 12px rgba(0, 0, 0, 0.15);
-}
-
-.card h2 {
-  font-size: 1.25rem;
-  margin-bottom: 1rem;
-  color: #1f2937;
-}
-
-/* Health Gauge */
-.health-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.health-gauge {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.gauge-text {
-  font-size: 2.5rem;
-  font-weight: 700;
-}
-
-/* AI Decision Panel */
-.ai-panel {
-  grid-column: span 2;
-}
-
-.decision-content {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.decision-text {
-  font-size: 1.25rem;
+.card-title {
+  color: #94a3b8;
+  font-size: 12px;
   font-weight: 600;
-  color: #1f2937;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  margin-bottom: 14px;
 }
 
-.reason-text {
-  color: #6b7280;
-  line-height: 1.6;
+/* ── Sensor Row ───────────────────────────────────────────────────────────── */
+.sensor-row {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 16px;
 }
 
-.next-check {
-  font-size: 0.9rem;
-  color: #9ca3af;
-  font-style: italic;
-}
-
-.weather-section {
-  margin-top: 1rem;
-  padding-top: 1rem;
-  border-top: 1px solid #e5e7eb;
-}
-
-.weather-info {
-  font-size: 1.1rem;
-  color: #3b82f6;
-  font-weight: 500;
-}
-
-.weather-loading,
-.weather-error {
-  font-size: 0.9rem;
-  color: #9ca3af;
-}
-
-/* Soil Moisture Card */
-.moisture-card {
-  position: relative;
-}
-
-.moisture-content {
+/* ── Sensor Card ──────────────────────────────────────────────────────────── */
+.sensor-card {
+  background: #1e293b;
+  border: 1px solid;
+  border-radius: 16px;
+  padding: 18px 16px 14px;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
+  align-items: flex-start;
+  gap: 6px;
+  box-shadow: 0 4px 16px #0004;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.sensor-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 28px #0007;
 }
 
-.moisture-value {
-  font-size: 3rem;
-  font-weight: 700;
-  color: #3b82f6;
-}
+.sensor-icon { line-height: 1; }
 
-.trend-arrow {
-  font-size: 2rem;
-  margin-left: 0.5rem;
-}
-
-.alert-text {
-  color: #ef4444;
-  font-weight: 600;
-  animation: pulse-text 1.5s ease-in-out infinite;
-}
-
-@keyframes pulse-text {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.6;
-  }
-}
-
-/* Moisture Alert Animation */
-.moisture-alert {
-  border: 2px solid #ef4444;
-  animation: pulse-glow 1.5s ease-in-out infinite;
-}
-
-@keyframes pulse-glow {
-  0%, 100% {
-    box-shadow: 0 0 5px #ef4444, 0 4px 6px rgba(0, 0, 0, 0.1);
-  }
-  50% {
-    box-shadow: 0 0 20px #ef4444, 0 4px 6px rgba(0, 0, 0, 0.1);
-  }
-}
-
-/* Sensor Values */
 .sensor-value {
-  font-size: 3rem;
+  font-size: 28px;
   font-weight: 700;
-  color: #1f2937;
-  text-align: center;
+  line-height: 1;
+  transition: color 0.3s ease;
 }
 
-/* Pump Control */
-.pump-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1rem;
+.sensor-unit {
+  font-size: 14px;
+  font-weight: 400;
+  margin-left: 2px;
+  opacity: 0.75;
 }
 
-.pump-button {
-  width: 100%;
-  padding: 1rem 2rem;
-  font-size: 1.25rem;
-  font-weight: 600;
-  border: none;
-  border-radius: 12px;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.pump-button.pump-on {
-  background: #22c55e;
-  color: white;
-}
-
-.pump-button.pump-on:hover {
-  background: #16a34a;
-  transform: scale(1.05);
-}
-
-.pump-button.pump-off {
-  background: #e5e7eb;
-  color: #6b7280;
-}
-
-.pump-button.pump-off:hover {
-  background: #d1d5db;
-  transform: scale(1.05);
-}
-
-.water-usage {
-  width: 100%;
-  text-align: center;
-  padding: 0.75rem;
-  background: #f3f4f6;
-  border-radius: 8px;
-}
-
-.usage-text {
-  font-size: 1.1rem;
-  color: #3b82f6;
+.sensor-label {
+  color: #94a3b8;
+  font-size: 12px;
   font-weight: 500;
 }
 
-.usage-loading {
-  font-size: 0.9rem;
-  color: #9ca3af;
+/* ── Middle Row ───────────────────────────────────────────────────────────── */
+.middle-row {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 20px;
+  align-items: stretch;
 }
 
-/* Footer */
-.dashboard-footer {
-  text-align: center;
-  color: white;
-  font-size: 0.9rem;
-  opacity: 0.8;
-}
-
-/* Loading State */
-.loading-container {
+/* ── Pump Button (floating) ───────────────────────────────────────────────── */
+.pump-btn {
+  position: fixed;
+  bottom: 28px;
+  right: 28px;
+  z-index: 200;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  border: 2px solid;
+  background: transparent;
   display: flex;
   flex-direction: column;
-  justify-content: center;
   align-items: center;
-  min-height: 100vh;
-  color: white;
+  justify-content: center;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 24px #0007;
+  gap: 2px;
 }
-
-.loading-spinner {
-  width: 50px;
-  height: 50px;
-  border: 4px solid rgba(255, 255, 255, 0.3);
-  border-top-color: white;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
+.pump-btn:hover {
+  transform: scale(1.08);
+  box-shadow: 0 8px 32px #0009;
 }
+.pump-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+/* ── Responsive ───────────────────────────────────────────────────────────── */
+@media (max-width: 1100px) {
+  .sensor-row { grid-template-columns: repeat(3, 1fr); }
+  .middle-row { grid-template-columns: 1fr; }
 }
-
-.loading-container p {
-  margin-top: 1rem;
-  font-size: 1.2rem;
-}
-
-/* Responsive Design */
-@media (max-width: 768px) {
-  .dashboard {
-    padding: 1rem;
-  }
-  
-  .dashboard-header h1 {
-    font-size: 1.75rem;
-  }
-  
-  .dashboard-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .ai-panel {
-    grid-column: span 1;
-  }
-  
-  .sensor-value,
-  .moisture-value {
-    font-size: 2rem;
-  }
+@media (max-width: 640px) {
+  .sensor-row { grid-template-columns: repeat(2, 1fr); }
+  .header { padding: 12px 16px; }
+  .main-content { padding: 14px; }
 }
