@@ -12,14 +12,14 @@ module.exports = {
         },
         {
             name: "agromind-backend",
-            cwd: "C:\\MyFiles\\AgroMindAI\\backend",
-            script: "C:\\MyFiles\\AgroMindAI\\backend\\venv\\Scripts\\python.exe",
+            cwd: "C:\\My files\\AroMindAI\\backend",
+            script: "C:\\My files\\AroMindAI\\backend\\venv\\Scripts\\python.exe",
             args: "-m uvicorn main:app --host 0.0.0.0 --port 8000",
             interpreter: "none"
         },
         {
             name: "agromind-dashboard",
-            cwd: "C:\\MyFiles\\AgroMindAI\\dashboard",
+            cwd: "C:\\My files\\AroMindAI\\dashboard",
             script: "node_modules\\.bin\\vite.cmd",
             args: "preview --port 5173",
             interpreter: "none"

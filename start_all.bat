@@ -7,7 +7,7 @@ start "Mosquitto" cmd /k "net start mosquitto"
 timeout /t 2
 
 echo Starting FastAPI Backend...
-start "Backend" cmd /k "cd C:\MyFiles\AgroMindAI\backend && C:\Python314\python.exe -m uvicorn main:app --host 0.0.0.0 --port 8000"
+start "Backend" cmd /k "cd C:\My files\AroMindAI\backend && C:\Python314\python.exe -m uvicorn main:app --host 0.0.0.0 --port 8000"
 
 timeout /t 3
 
@@ -17,17 +17,17 @@ start "n8n" cmd /k "n8n start"
 timeout /t 5
 
 echo Starting Dashboard...
-start "Dashboard" cmd /k "serve -s C:\MyFiles\AgroMindAI\dashboard\dist -l 5173"
+start "Dashboard" cmd /k "serve -s C:\My files\AroMindAI\dashboard\dist -l 5173"
 
 timeout /t 2
 
 echo Starting ngrok tunnel for dashboard...
-start "ngrok" cmd /k "C:\MyFiles\AgroMindAI\ngrok.exe http 5173"
+start "ngrok" cmd /k "C:\My files\AroMindAI\ngrok.exe http 5173"
 
 timeout /t 2
 
 echo Starting Cloudflare tunnel for backend...
-start "Cloudflare" cmd /k "C:\MyFiles\AgroMindAI\cloudflared.exe tunnel --url http://localhost:8000"
+start "Cloudflare" cmd /k "C:\My files\AroMindAI\cloudflared.exe tunnel --url http://localhost:8000"
 
 echo.
 echo All services started!

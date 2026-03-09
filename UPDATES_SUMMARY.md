@@ -1,6 +1,7 @@
 # AgroMind AI - Updates Summary
 
 ## Date: March 9, 2026
+## Project Path: C:\My files\AroMindAI
 
 ### ✅ All Updates Applied
 
