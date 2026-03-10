@@ -26,11 +26,8 @@ start "ngrok" cmd /k "C:\My files\AroMindAI\ngrok.exe http 5173"
 
 timeout /t 2
 
-echo Starting Cloudflare tunnel for backend...
-start "Cloudflare" cmd /k "C:\My files\AroMindAI\cloudflared.exe tunnel --url http://localhost:8000"
-
 echo.
 echo All services started!
 echo Dashboard: https://columbus-unacidulated-alvina.ngrok-free.dev
-echo Check Cloudflare terminal for backend URL
+echo Backend: Check ngrok terminal for backend tunnel URL
 pause

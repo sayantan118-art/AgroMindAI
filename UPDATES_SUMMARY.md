@@ -27,9 +27,11 @@
 ## 2. Dashboard (dashboard/src/App.jsx)
 
 ### Updated API URLs
-- ✅ Changed from Cloudflare to ngrok tunnel:
+- ✅ Changed to ngrok tunnel (Cloudflare removed):
   ```javascript
   const API_BASE = 'https://columbus-unacidulated-alvina.ngrok-free.app'
+  const WS_BASE = 'wss://columbus-unacidulated-alvina.ngrok-free.app'
+  ```
   const WS_BASE = 'wss://columbus-unacidulated-alvina.ngrok-free.app'
   ```
 
@@ -177,7 +179,7 @@ dist/assets/index-BnbriyDP.js   546.78 kB │ gzip: 167.55 kB
 - [x] All decimals show 1 decimal place
 - [x] Health gauge is 270-degree arc
 - [x] Firmware file created with correct pins
-- [x] No Cloudflare references remain
+- [x] No Cloudflare - using ngrok only
 - [x] Dashboard builds successfully
 - [x] Git repository is clean
 - [x] All essential files preserved
