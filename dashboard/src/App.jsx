@@ -5,8 +5,8 @@ import {
 import { Droplets, Thermometer, Wind, Sun, CloudRain, Zap, Activity } from 'lucide-react'
 import './App.css'
 
-const API_BASE = 'https://columbus-unacidulated-alvina.ngrok-free.app'
-const WS_BASE = 'wss://columbus-unacidulated-alvina.ngrok-free.app'
+const API_BASE = 'https://agromind-ai.onrender.com'
+const WS_BASE = 'wss://agromind-ai.onrender.com/ws'
 
 // ─── Mock / fallback data ────────────────────────────────────────────────────
 const MOCK = {

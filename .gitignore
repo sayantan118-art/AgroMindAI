@@ -7,3 +7,8 @@ agromind.db
 dist/
 reports/
 *.log
+temp.json
+*.tmp
+.DS_Store
+ngrok.exe
+ngrok

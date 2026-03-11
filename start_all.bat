@@ -1,33 +1,41 @@
 @echo off
-echo Starting AgroMind AI Full Stack...
+echo =========================================
+echo    AgroMind AI v3.0 - Local Dev Startup
+echo =========================================
+echo.
 
-echo Starting Mosquitto MQTT...
-start "Mosquitto" cmd /k "net start mosquitto"
+echo [1] Starting Mosquitto MQTT Broker...
+start "Mosquitto" /min cmd /c "net start mosquitto"
+timeout /t 2 >nul
 
-timeout /t 2
+echo [2] Starting FastAPI Backend (port 8000)...
+start "Backend" /min cmd /c "cd /d "C:\My files\AroMindAI\backend" && C:\Python314\python.exe -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
+timeout /t 3 >nul
 
-echo Starting FastAPI Backend...
-start "Backend" cmd /k "cd C:\My files\AroMindAI\backend && C:\Python314\python.exe -m uvicorn main:app --host 0.0.0.0 --port 8000"
+echo [3] Starting n8n Workflow Engine (port 5678)...
+start "n8n" /min cmd /c "n8n start"
+timeout /t 5 >nul
 
-timeout /t 3
-
-echo Starting n8n...
-start "n8n" cmd /k "n8n start"
-
-timeout /t 5
-
-echo Starting Dashboard...
-start "Dashboard" cmd /k "serve -s C:\My files\AroMindAI\dashboard\dist -l 5173"
-
-timeout /t 2
-
-echo Starting ngrok tunnel for dashboard...
-start "ngrok" cmd /k "C:\My files\AroMindAI\ngrok.exe http 5173"
-
-timeout /t 2
+echo [4] Starting React Dashboard (port 5173)...
+start "Dashboard" /min cmd /c "serve -s "C:\My files\AroMindAI\dashboard\dist" -l 5173"
+timeout /t 2 >nul
 
 echo.
-echo All services started!
-echo Dashboard: https://columbus-unacidulated-alvina.ngrok-free.dev
-echo Backend: Check ngrok terminal for backend tunnel URL
+echo =========================================
+echo  All services started in background!
+echo =========================================
+echo.
+echo  Backend API:    http://localhost:8000
+echo  Backend Docs:   http://localhost:8000/docs
+echo  Agent Health:   http://localhost:8000/agents/health
+echo  Dashboard:      http://localhost:5173
+echo  n8n Workflows:  http://localhost:5678
+echo.
+echo  NOTE: Backend is ALSO deployed on Render:
+echo        https://agromind-ai.onrender.com
+echo.
+echo  Import workflows from: C:\My files\AroMindAI\workflows\
+echo  (use workflow-main.json, workflow-health.json, workflow-report.json)
+echo.
+echo =========================================
 pause

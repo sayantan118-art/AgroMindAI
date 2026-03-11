@@ -19,7 +19,7 @@ Check-Port "Mosquitto MQTT"      1883
 Check-Port "FastAPI Backend"     8000
 Check-Port "n8n Workflow Engine" 5678
 Check-Port "AnythingLLM"         3001
-Check-Port "Ollama"              11434
+# Check-Port "LegacyLLM"          11434  # legacy local LLM service (deprecated)
 Check-Port "React Dashboard"     5173
 
 Write-Host "`n======================================`n" -ForegroundColor Cyan
