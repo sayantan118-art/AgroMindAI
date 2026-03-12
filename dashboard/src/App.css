@@ -183,13 +183,92 @@ body {
 }
 .pump-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
-/* ── Responsive ───────────────────────────────────────────────────────────── */
 @media (max-width: 1100px) {
   .sensor-row { grid-template-columns: repeat(3, 1fr); }
   .middle-row { grid-template-columns: 1fr; }
+  .analytics-grid { grid-template-columns: repeat(2, 1fr); }
 }
 @media (max-width: 640px) {
-  .sensor-row { grid-template-columns: repeat(2, 1fr); }
-  .header { padding: 12px 16px; }
-  .main-content { padding: 14px; }
+  .sensor-row, .analytics-grid { grid-template-columns: repeat(1, 1fr); }
+  .header { padding: 12px 16px; flex-wrap: wrap; gap: 8px; }
+  .main-content, .main { padding: 14px; }
 }
+
+/* ── App Layout ───────────────────────────────────────────────────────────── */
+.app { min-height: 100vh; background: #0f172a; }
+.main { max-width: 1400px; margin: 0 auto; padding: 24px; display: flex; flex-direction: column; gap: 22px; }
+
+/* ── Header ───────────────────────────────────────────────────────────────── */
+.header-left  { display: flex; align-items: center; gap: 10px; }
+.header-right { display: flex; align-items: center; gap: 16px; }
+.logo { font-size: 1.2rem; font-weight: 700; color: #f1f5f9; }
+.live-clock   { font-size: 1.1rem; font-weight: 600; color: #22c55e; font-variant-numeric: tabular-nums; letter-spacing: 0.05em; }
+.status-dot   { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.status-dot.online  { background: #22c55e; box-shadow: 0 0 0 3px #22c55e33; animation: pulseG 2s infinite; }
+.status-dot.offline { background: #ef4444; box-shadow: 0 0 0 3px #ef444433; }
+.status-text { font-size: 0.85rem; color: #94a3b8; }
+@keyframes pulseG { 0%,100%{ box-shadow: 0 0 0 0 #22c55e44; } 50%{ box-shadow: 0 0 0 7px #22c55e00; } }
+
+/* ── Section titles ───────────────────────────────────────────────────────── */
+.section-title { color: #64748b; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; display: flex; align-items: center; gap: 8px; }
+
+/* ── Sensor grid ──────────────────────────────────────────────────────────── */
+.sensor-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; }
+@media (max-width: 1200px) { .sensor-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 640px)  { .sensor-grid { grid-template-columns: repeat(2, 1fr); } }
+
+/* ── Health + Decision row ────────────────────────────────────────────────── */
+.row-two { display: grid; grid-template-columns: 220px 1fr; gap: 18px; align-items: stretch; }
+@media (max-width: 700px) { .row-two { grid-template-columns: 1fr; } }
+.health-card, .decision-card { position: relative; }
+.gauge-container { position: relative; display: flex; align-items: center; justify-content: center; }
+.gauge-value { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center; }
+.decision-badge { display: inline-block; padding: 6px 18px; border-radius: 99px; font-size: 1.4rem; font-weight: 700; margin-bottom: 8px; }
+.decision-reason { color: #94a3b8; font-size: 0.85rem; line-height: 1.5; }
+.next-check { margin-top: 12px; display: flex; flex-direction: column; gap: 2px; }
+.countdown { font-size: 2rem; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: 0.05em; }
+
+/* ── Analytics grid ───────────────────────────────────────────────────────── */
+.analytics-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+@media (max-width: 900px) { .analytics-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px)  { .analytics-grid { grid-template-columns: 1fr; } }
+
+.analytics-panel {
+  background: #1e293b;
+  border: 1px solid;
+  border-radius: 16px;
+  padding: 18px 20px;
+  box-shadow: 0 4px 20px #0004;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.analytics-panel:hover { transform: translateY(-2px); box-shadow: 0 8px 30px #0007; }
+.analytics-header { display: flex; align-items: center; gap: 7px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 14px; }
+.ana-main { font-size: 1.8rem; font-weight: 700; line-height: 1.1; margin-bottom: 4px; }
+.ana-unit { font-size: 0.85rem; font-weight: 400; opacity: 0.7; }
+.ana-badge { font-size: 1.1rem; font-weight: 700; }
+.ana-sub { font-size: 0.78rem; color: #64748b; margin-top: 6px; line-height: 1.5; }
+
+/* ── Crop selects ─────────────────────────────────────────────────────────── */
+.crop-select {
+  background: #0f172a; color: #e2e8f0; border: 1px solid #334155;
+  border-radius: 8px; padding: 6px 10px; font-size: 0.85rem; font-family: inherit;
+  cursor: pointer; outline: none; flex: 1; min-width: 100px;
+}
+.crop-select:focus { border-color: #a855f7; }
+.crop-save-btn {
+  background: #a855f7; color: #fff; border: none; border-radius: 8px;
+  padding: 6px 16px; font-size: 0.85rem; font-family: inherit;
+  cursor: pointer; font-weight: 600; transition: background 0.2s;
+}
+.crop-save-btn:hover { background: #9333ea; }
+.crop-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Chart tabs ───────────────────────────────────────────────────────────── */
+.chart-tabs { display: flex; gap: 4px; margin-left: auto; }
+.tab-btn {
+  background: transparent; border: 1px solid #334155; color: #94a3b8;
+  border-radius: 6px; padding: 4px 12px; font-size: 0.78rem; font-family: inherit;
+  cursor: pointer; transition: all 0.15s;
+}
+.tab-btn.active, .tab-btn:hover { background: #6366f1; color: #fff; border-color: #6366f1; }
+.chart-card { padding: 20px 12px 12px; }

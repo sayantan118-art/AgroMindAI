@@ -1,7 +1,9 @@
 import os, json, asyncio, datetime
 import mqtt_worker
+import analytics as ana
+import crop_config as cc
 from typing import Optional
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -107,6 +109,7 @@ async def init_db():
 @app.on_event("startup")
 async def startup():
     await init_db()
+    await cc.init_crop_table()
     # Launch the MQTT background subscriber (replaces n8n)
     loop = asyncio.get_running_loop()
     mqtt_worker.init(loop, ws_clients, DB_PATH)
@@ -181,12 +184,19 @@ async def sensor_latest():
     return dict(row) if row else {"message": "No data yet"}
 
 @app.get("/sensor/history")
-async def sensor_history(limit: int = 100):
+async def sensor_history(limit: int = 100, hours: Optional[int] = None):
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
-        cur = await db.execute(
-            "SELECT * FROM sensor_logs ORDER BY id DESC LIMIT ?", (limit,)
-        )
+        if hours:
+            since = (datetime.datetime.now() - datetime.timedelta(hours=hours)).isoformat(sep=' ')
+            cur = await db.execute(
+                "SELECT * FROM sensor_logs WHERE ts >= ? ORDER BY id DESC LIMIT ?",
+                (since, limit)
+            )
+        else:
+            cur = await db.execute(
+                "SELECT * FROM sensor_logs ORDER BY id DESC LIMIT ?", (limit,)
+            )
         rows = await cur.fetchall()
     return [dict(r) for r in rows]
 
@@ -239,6 +249,115 @@ async def pump_usage_today():
     rows = [dict(r) for r in rows]
     total_on_sec = sum(r["duration_sec"] for r in rows if r["action"] == "ON")
     return {"date": today, "total_on_seconds": total_on_sec, "events": rows}
+
+# ── Analytics endpoints ───────────────────────────────────────────────────────
+
+@app.get("/analytics/et0")
+async def get_et0():
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cur = await db.execute("SELECT temperature, humidity, light FROM sensor_logs ORDER BY id DESC LIMIT 1")
+        row = await cur.fetchone()
+    if not row:
+        return {"error": "No sensor data yet"}
+    r = dict(row)
+    return ana.compute_et0(r["temperature"] or 25, r["humidity"] or 60, r["light"] or 1000)
+
+@app.get("/analytics/stress")
+async def get_stress():
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cur = await db.execute("SELECT * FROM sensor_logs ORDER BY id DESC LIMIT 1")
+        row = await cur.fetchone()
+    if not row:
+        return {"error": "No sensor data yet"}
+    r = dict(row)
+    cfg = await cc.get_crop_config()
+    return ana.compute_stress_index(
+        r["soil_moisture"] or 50, r["temperature"] or 25, r["humidity"] or 60,
+        r["light"] or 1000, bool(r["rain_detected"]),
+        cfg["soil_min_pct"], cfg["soil_max_pct"]
+    )
+
+@app.get("/analytics/pest-risk")
+async def get_pest_risk():
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cur = await db.execute("SELECT temperature, humidity FROM sensor_logs ORDER BY id DESC LIMIT 1")
+        row = await cur.fetchone()
+    if not row:
+        return {"error": "No sensor data yet"}
+    r = dict(row)
+    return ana.compute_pest_risk(r["temperature"] or 25, r["humidity"] or 60)
+
+@app.get("/analytics/irrigation-eta")
+async def get_irrigation_eta():
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cur = await db.execute("SELECT soil_moisture, ts FROM sensor_logs ORDER BY id DESC LIMIT 48")
+        rows = await cur.fetchall()
+    cfg = await cc.get_crop_config()
+    return ana.compute_irrigation_eta([dict(r) for r in rows], cfg["soil_min_pct"])
+
+@app.get("/analytics/water-usage")
+async def get_water_usage():
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        since = (datetime.datetime.now() - datetime.timedelta(days=7)).isoformat(sep=' ')
+        cur = await db.execute(
+            "SELECT action, duration_sec, ts FROM pump_log WHERE ts >= ? ORDER BY id DESC", (since,)
+        )
+        rows = await cur.fetchall()
+    return ana.compute_water_usage([dict(r) for r in rows])
+
+@app.get("/analytics/all")
+async def get_all_analytics():
+    """Single endpoint — dashboard fetches all analytics in one call."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cur = await db.execute("SELECT * FROM sensor_logs ORDER BY id DESC LIMIT 1")
+        row = await cur.fetchone()
+        latest = dict(row) if row else {}
+        cur2 = await db.execute("SELECT soil_moisture, ts FROM sensor_logs ORDER BY id DESC LIMIT 48")
+        history = [dict(r) for r in await cur2.fetchall()]
+        since7d = (datetime.datetime.now() - datetime.timedelta(days=7)).isoformat(sep=' ')
+        cur3 = await db.execute("SELECT action, duration_sec, ts FROM pump_log WHERE ts >= ?", (since7d,))
+        pump_rows = [dict(r) for r in await cur3.fetchall()]
+    if not latest:
+        return {"error": "No data yet"}
+    cfg = await cc.get_crop_config()
+    t = latest.get("temperature") or 25.0
+    h = latest.get("humidity") or 60.0
+    l = latest.get("light") or 1000.0
+    s = latest.get("soil_moisture") or 50.0
+    rain = bool(latest.get("rain_detected"))
+    return {
+        "et0":            ana.compute_et0(t, h, l),
+        "stress":         ana.compute_stress_index(s, t, h, l, rain, cfg["soil_min_pct"], cfg["soil_max_pct"]),
+        "pest_risk":      ana.compute_pest_risk(t, h),
+        "irrigation_eta": ana.compute_irrigation_eta(history, cfg["soil_min_pct"]),
+        "water_usage":    ana.compute_water_usage(pump_rows),
+        "crop_config":    cfg,
+    }
+
+
+# ── Crop Stage endpoints ───────────────────────────────────────────────────────
+
+@app.get("/crop/stage")
+async def get_crop_stage():
+    return await cc.get_crop_config()
+
+class CropStageUpdate(BaseModel):
+    crop: str
+    stage: str
+
+@app.post("/crop/stage")
+async def set_crop_stage(data: CropStageUpdate):
+    try:
+        return await cc.set_crop_config(data.crop, data.stage)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
 
 # ── Report endpoints ──────────────────────────────────────────
 
