@@ -22,8 +22,10 @@
 #define WIFI_SSID "Sayantan's Mobile"
 #define WIFI_PASS "sayantan"
 
-#define MQTT_BROKER "10.21.34.128"
-#define MQTT_PORT 1883
+#define MQTT_BROKER "ca00f7c09b924f9dba1292f9e449fc12.s1.eu.hivemq.cloud"
+#define MQTT_PORT 8883
+#define MQTT_USER "ranar110"
+#define MQTT_PASS "Paspor2132"
 
 // ==================== SENSOR CONFIG ====================
 #define DHT_TYPE DHT22
@@ -34,7 +36,9 @@
 #define PUBLISH_INTERVAL_MS 10000
 
 // ==================== GLOBAL OBJECTS ====================
-WiFiClient espClient;
+// TLS Client for HiveMQ Port 8883
+#include <WiFiClientSecure.h>
+WiFiClientSecure espClient;
 PubSubClient mqttClient(espClient);
 DHT dht(DHT_PIN, DHT_TYPE);
 
@@ -79,6 +83,7 @@ void setup() {
 
   dht.begin();
 
+  espClient.setInsecure(); // Required for HiveMQ TLS
   setupWiFi();
   setupMQTT();
 
@@ -154,7 +159,7 @@ void reconnectMQTT() {
   String clientId = "AgroMindESP32-";
   clientId += String(random(0xffff), HEX);
 
-  if (mqttClient.connect(clientId.c_str())) {
+  if (mqttClient.connect(clientId.c_str(), MQTT_USER, MQTT_PASS)) {
 
     Serial.println("connected");
 

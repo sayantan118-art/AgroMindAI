@@ -12,7 +12,7 @@
       "typeVersion": 1,
       "position": [250, 300],
       "credentials": {
-        "mqtt": { "id": "mqtt-cred", "name": "Mosquitto Local" }
+        "mqtt": { "id": "mqtt-hivemq", "name": "HiveMQ Cloud" }
       }
     },
     {
@@ -75,7 +75,7 @@
       "typeVersion": 1,
       "position": [1500, 175],
       "credentials": {
-        "mqtt": { "id": "mqtt-cred", "name": "Mosquitto Local" }
+        "mqtt": { "id": "mqtt-hivemq", "name": "HiveMQ Cloud" }
       }
     },
     {
@@ -101,7 +101,7 @@
       "typeVersion": 1,
       "position": [2000, 175],
       "credentials": {
-        "mqtt": { "id": "mqtt-cred", "name": "Mosquitto Local" }
+        "mqtt": { "id": "mqtt-hivemq", "name": "HiveMQ Cloud" }
       }
     },
     {
