@@ -17,7 +17,7 @@
     },
     {
       "parameters": {
-        "url": "https://agromind-ai.onrender.com/weather/forecast",
+        "url": "https://agromindai-q5m4.onrender.com/weather/forecast",
         "options": { "timeout": 10000 }
       },
       "id": "get-weather",
@@ -29,7 +29,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://agromind-ai.onrender.com/agents/decide",
+        "url": "https://agromindai-q5m4.onrender.com/agents/decide",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={\n  \"sensor_data\": {\n    \"soil_moisture\": {{ $('MQTT Trigger').item.json.soil }},\n    \"temperature\": {{ $('MQTT Trigger').item.json.temp }},\n    \"humidity\": {{ $('MQTT Trigger').item.json.hum }},\n    \"light\": {{ $('MQTT Trigger').item.json.light }},\n    \"rain_detected\": {{ $('MQTT Trigger').item.json.rain }}\n  },\n  \"weather_data\": {\n    \"rain_probability_next_hour\": {{ $('Get Weather Forecast').item.json.rain_probability_next_hour }},\n    \"rain_expected\": {{ $('Get Weather Forecast').item.json.rain_expected }},\n    \"precipitation_probability_max\": {{ $('Get Weather Forecast').item.json.precipitation_probability_max }},\n    \"temperature_2m_max\": {{ $('Get Weather Forecast').item.json.temperature_2m_max }}\n  }\n}",
@@ -107,7 +107,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://agromind-ai.onrender.com/sensor/log",
+        "url": "https://agromindai-q5m4.onrender.com/sensor/log",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={\n  \"soil_moisture\": {{ $('Parse Decision').item.json.soil_moisture }},\n  \"temperature\": {{ $('Parse Decision').item.json.temperature }},\n  \"humidity\": {{ $('Parse Decision').item.json.humidity }},\n  \"light\": {{ $('Parse Decision').item.json.light }},\n  \"rain_detected\": {{ $('Parse Decision').item.json.rain_detected }},\n  \"rain_expected\": {{ $('Parse Decision').item.json.rain_expected }},\n  \"decision\": \"{{ $('Parse Decision').item.json.decision }}\",\n  \"reason\": \"{{ $('Parse Decision').item.json.reason }}\",\n  \"health_score\": {{ $('Parse Decision').item.json.health_score }},\n  \"next_check_minutes\": {{ $('Parse Decision').item.json.next_check_minutes }},\n  \"pump_duration_sec\": {{ $('Parse Decision').item.json.irrigation_duration_sec }},\n  \"confidence\": {{ $('Parse Decision').item.json.confidence }},\n  \"risk_level\": \"{{ $('Parse Decision').item.json.risk_level }}\"\n}",
@@ -122,7 +122,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://agromind-ai.onrender.com/pump/log",
+        "url": "https://agromindai-q5m4.onrender.com/pump/log",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={\"action\":\"ON\",\"duration_sec\":{{ $('Parse Decision').item.json.irrigation_duration_sec }}}",

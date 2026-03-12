@@ -29,8 +29,8 @@
 ### Updated API URLs
 - ✅ Switched to Render cloud deployment:
   ```javascript
-  const API_BASE = 'https://agromind-ai.onrender.com'
-  const WS_BASE = 'wss://agromind-ai.onrender.com/ws'
+  const API_BASE = 'https://agromindai-q5m4.onrender.com'
+  const WS_BASE = 'wss://agromindai-q5m4.onrender.com/ws'
   ```
   (ngrok tunneling is no longer required)
 
@@ -132,9 +132,9 @@ dist/assets/index-BnbriyDP.js   546.78 kB │ gzip: 167.55 kB
 
 ### Current Deployment
 - **Platform**: Render cloud
-- **Base URL**: https://agromind-ai.onrender.com
-- **Backend API**: https://agromind-ai.onrender.com/api
-- **Dashboard**: https://agromind-ai.onrender.com
+- **Base URL**: https://agromindai-q5m4.onrender.com
+- **Backend API**: https://agromindai-q5m4.onrender.com/api
+- **Dashboard**: https://agromindai-q5m4.onrender.com
 
 
 ### Services Status

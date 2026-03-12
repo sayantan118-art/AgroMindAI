@@ -190,7 +190,7 @@ AgroMind AI now features a **complete multi-agent autonomous system** with 6 spe
 │  └─ (legacy local LLM services removed)                                │
 │                                                                          │
 │  Public Access: Cloud deployment on Render                              │
-│  └─ https://agromind-ai.onrender.com (API & dashboard)                 │
+│  └─ https://agromindai-q5m4.onrender.com (API & dashboard)                 │
 └─────────────────────────────────────────────────────────────────────────┘
                                     ↓
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -210,8 +210,8 @@ AgroMind AI now features a **complete multi-agent autonomous system** with 6 spe
 │  └─ Responsive design with dark theme                                  │
 │                                                                          │
 │  API Configuration:                                                     │
-│  ├─ API_BASE: https://agromind-ai.onrender.com                          │
-│  └─ WS_BASE: wss://agromind-ai.onrender.com/ws                          │
+│  ├─ API_BASE: https://agromindai-q5m4.onrender.com                          │
+│  └─ WS_BASE: wss://agromindai-q5m4.onrender.com/ws                          │
 │                                                                          │
 │  Local Access (development): http://localhost:5173                     │
 │  Network Access: via local LAN IP                                        │
@@ -343,8 +343,8 @@ Sensor Data → n8n Workflow → Backend /weather/forecast → Open-Meteo API
 
 ### 4. Dashboard Access Flow
 ```
-User Device → https://agromind-ai.onrender.com (dashboard) → Static Files served by Render
-→ Dashboard JavaScript → https://agromind-ai.onrender.com/api → Backend API
+User Device → https://agromindai-q5m4.onrender.com (dashboard) → Static Files served by Render
+→ Dashboard JavaScript → https://agromindai-q5m4.onrender.com/api → Backend API
 → SQLite Query → JSON Response → Dashboard Render
 ```
 
@@ -411,7 +411,7 @@ Every Sensor Reading → Memory Agent stores in deque (max 5)
 
 ## Network Configuration
 
-All services are deployed to Render and accessed via the shared domain https://agromind-ai.onrender.com. Local network and ngrok details are legacy and no longer used.
+All services are deployed to Render and accessed via the shared domain https://agromindai-q5m4.onrender.com. Local network and ngrok details are legacy and no longer used.
 
 (Development environment may still use localhost addresses, but these are not required for production.)
 
