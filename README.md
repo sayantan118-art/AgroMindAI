@@ -13,7 +13,7 @@ ESP32 Sensors
   → MQTT (Mosquitto local / HiveMQ Cloud)
   → n8n Workflows
   → FastAPI Backend (Render)
-  → Groq API Multi-Agent System (llama3-8b-8192)
+  → Groq API Multi-Agent System (llama-3.3-70b-versatile)
   → Validated Irrigation Decision
   → MQTT Pump Command
   → ESP32 Relay → Water Pump
@@ -28,7 +28,7 @@ ESP32 Sensors
 | Communication | MQTT (Mosquitto / HiveMQ Cloud) |
 | Automation | n8n Workflows |
 | Backend | FastAPI (Python) on Render |
-| AI | Groq API — llama3-8b-8192 (6 specialized agents) |
+| AI | Groq API — llama-3.3-70b-versatile (6 specialized agents) |
 | Database | SQLite (Render persistent disk) |
 | Dashboard | React + Vite + Recharts |
 | Weather | Open-Meteo API |
@@ -71,7 +71,7 @@ start_all.bat
 
 ## AI Agents
 
-The system uses 6 specialized agents powered by Groq (llama3-8b-8192):
+The system uses 6 specialized agents powered by Groq (llama-3.3-70b-versatile):
 
 1. **Sensor Interpreter** — Classifies environmental state from raw readings
 2. **Crop Doctor** — Assesses crop health (0–100 score) and stress type

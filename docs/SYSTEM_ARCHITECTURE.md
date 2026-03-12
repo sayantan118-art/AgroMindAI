@@ -78,7 +78,7 @@ AgroMind AI now features a **complete multi-agent autonomous system** with 6 spe
 │  │ 1. MQTT Trigger → Receives sensor data                          │   │
 │  │ 2. Get Weather Forecast → Calls Backend API                     │   │
 │  │ 3. Groq Decision → AI analysis via Groq API (LLaMA 3)           │   │
-│  │    - Model: llama3-8b-8192                                       │   │
+│  │    - Model: llama-3.3-70b-versatile                                       │   │
 │  │    - API: https://api.groq.com/openai/v1/chat/completions       │   │
 │  │    - Returns: decision, reason, health_score, next_check        │   │
 │  │ 4. Parse Decision JSON → Extracts AI response                   │   │
@@ -185,7 +185,7 @@ AgroMind AI now features a **complete multi-agent autonomous system** with 6 spe
 │  ├─ Open-Meteo Weather API (https://api.open-meteo.com)                │
 │  │   └─ Location: 22.5726°N, 88.3639°E (Kolkata area)                  │
 │  ├─ Groq Cloud API (https://api.groq.com) - Multi-Agent System         │
-│  │   ├─ Model: llama3-8b-8192 (used by all 6 agents)                   │
+│  │   ├─ Model: llama-3.3-70b-versatile (used by all 6 agents)                   │
 │  │   └─ Key supplied via environment variable (GROQ_API_KEY)          │
 │  └─ (legacy local LLM services removed)                                │
 │                                                                          │
@@ -222,7 +222,7 @@ AgroMind AI now features a **complete multi-agent autonomous system** with 6 spe
 │                    AI LAYER (Multi-Agent System)                        │
 ├─────────────────────────────────────────────────────────────────────────┤
 │  PRIMARY: Multi-Agent System (Groq Cloud API)                           │
-│  ├─ Model: llama3-8b-8192 (LLaMA 3 8B, 8192 token context)             │
+│  ├─ Model: llama-3.3-70b-versatile (LLaMA 3 8B, 8192 token context)             │
 │  ├─ API: https://api.groq.com/openai/v1/chat/completions               │
 │  ├─ Key: configure via GROQ_API_KEY environment variable             │
 │  ├─ Temperature: 0.1-0.3 (deterministic, varies by agent)              │

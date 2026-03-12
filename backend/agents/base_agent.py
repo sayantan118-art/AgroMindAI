@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class BaseAgent(ABC):
     """Base class for all AI agents in the system"""
     
-    def __init__(self, name: str, groq_api_key: str, model: str = "llama3-8b-8192"):
+    def __init__(self, name: str, groq_api_key: str, model: str = "llama-3.3-70b-versatile"):
         self.name = name
         self.groq_api_key = groq_api_key
         self.model = model
