@@ -80,13 +80,12 @@
     },
     {
       "parameters": {
-        "amount": "={{ $json.irrigation_duration_sec || 60 }}",
-        "unit": "seconds"
+        "jsCode": "// Simple delay to keep pump running (duration from prior node)\nconst duration = $input.item.json.irrigation_duration_sec || 60;\nawait new Promise(r => setTimeout(r, duration * 1000));\nreturn $input.all();"
       },
       "id": "wait",
       "name": "Wait (duration_sec)",
-      "type": "n8n-nodes-base.wait",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [1750, 175]
     },
     {
