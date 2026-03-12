@@ -1,0 +1,16 @@
+node_modules/
+venv/
+__pycache__/
+*.pyc
+agromind.db
+.env
+dist/
+reports/
+*.log
+temp.json
+*.tmp
+.DS_Store
+ngrok.exe
+ngrok
+# n8n workflows kept locally only (may contain secrets)
+workflows/

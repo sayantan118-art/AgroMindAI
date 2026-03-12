@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+python-dotenv
+httpx
+aiosqlite
+slowapi
+pydantic
+websockets
+groq
+paho-mqtt
