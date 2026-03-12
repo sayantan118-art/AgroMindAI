@@ -6,7 +6,7 @@ import { Droplets, Thermometer, Wind, Sun, CloudRain, Zap, Activity } from 'luci
 import './App.css'
 
 const API_BASE = 'https://agromindai-q5m4.onrender.com'
-const WS_BASE = 'wss://agromindai-q5m4.onrender.com/ws'
+const WS_BASE = 'wss://agromindai-q5m4.onrender.com'
 
 // ─── Mock / fallback data ────────────────────────────────────────────────────
 const MOCK = {
