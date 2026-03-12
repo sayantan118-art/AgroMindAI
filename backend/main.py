@@ -1,4 +1,5 @@
 import os, json, asyncio, datetime
+import mqtt_worker
 from typing import Optional
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -109,7 +110,11 @@ async def init_db():
 @app.on_event("startup")
 async def startup():
     await init_db()
-    print("AgroMind Backend v3.0 started. DB initialized.")
+    # Launch the MQTT background subscriber (replaces n8n)
+    loop = asyncio.get_running_loop()
+    mqtt_worker.init(loop, ws_clients, DB_PATH)
+    mqtt_worker.start()
+    print("AgroMind Backend v3.0 started. DB initialized. MQTT worker launched.")
 
 # ── Models ────────────────────────────────────────────────────
 class SensorLog(BaseModel):
