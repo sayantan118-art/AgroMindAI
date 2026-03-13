@@ -183,6 +183,24 @@ body {
 }
 .pump-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
+/* ── Pump Card (interactive sensor card) ──────────────────────────────────── */
+.pump-card {
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.3s ease;
+}
+.pump-card:hover {
+  transform: translateY(-3px) scale(1.02);
+  box-shadow: 0 10px 32px #0009;
+}
+.pump-card:active { transform: scale(0.97); }
+.pump-card-on {
+  animation: pumpCardPulse 1.4s infinite;
+}
+@keyframes pumpCardPulse {
+  0%, 100% { box-shadow: 0 0 0 0 #22c55e33; }
+  50%       { box-shadow: 0 0 0 10px #22c55e00; }
+}
+
+
 @media (max-width: 1100px) {
   .sensor-row { grid-template-columns: repeat(3, 1fr); }
   .middle-row { grid-template-columns: 1fr; }

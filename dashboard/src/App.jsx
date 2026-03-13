@@ -56,6 +56,27 @@ function SensorCard({ icon: Icon, label, value, unit, color }) {
   )
 }
 
+function PumpCard({ pumpOn, pumpBusy, onToggle }) {
+  const color = pumpOn ? '#22c55e' : '#475569'
+  const label = pumpBusy ? 'WAIT…' : pumpOn ? 'TAP TO STOP' : 'TAP TO START'
+  return (
+    <div
+      className={`sensor-card pump-card ${pumpOn ? 'pump-card-on' : ''}`}
+      style={{ borderColor: color + '66', cursor: pumpBusy ? 'wait' : 'pointer', userSelect: 'none' }}
+      onClick={onToggle}
+      title={pumpOn ? 'Pump is ON — tap to stop' : 'Tap to manually activate pump (30s)'}
+    >
+      <div className="sensor-icon" style={{ color }}>
+        <Zap size={28} />
+      </div>
+      <div className="sensor-value" style={{ color }}>
+        {pumpBusy ? '…' : pumpOn ? 'ON' : 'OFF'}
+      </div>
+      <div className="sensor-label" style={{ color: color, fontSize: '0.7rem', fontWeight: 600, letterSpacing: '0.05em' }}>Pump — {label}</div>
+    </div>
+  )
+}
+
 function HealthGauge({ score }) {
   const r = 70, circ = 2 * Math.PI * r
   const progress = (score / 100) * circ
@@ -313,7 +334,7 @@ export default function App() {
           <SensorCard icon={Wind}        label="Humidity"     value={fmt(data.humidity)}       unit="%" color="#3b82f6" />
           <SensorCard icon={Sun}         label="Light Level"  value={Math.round(data.light || 0)} unit="" color="#eab308" />
           <SensorCard icon={CloudRain}   label="Rain"         value={data.rain_detected ? 'YES' : 'NO'} unit="" color={data.rain_detected ? '#22c55e' : '#475569'} />
-          <SensorCard icon={Zap}         label="Pump"         value={data.pump ? 'ON' : 'OFF'} unit="" color={data.pump ? '#22c55e' : '#475569'} />
+          <PumpCard pumpOn={pumpOn} pumpBusy={pumpBusy} onToggle={togglePump} />
         </div>
 
         {/* ─── Health + Decision ──────────────────────────────────── */}
@@ -447,17 +468,6 @@ export default function App() {
         </div>
 
       </main>
-
-      {/* ─── Floating Pump Button ───────────────────────────────── */}
-      <button
-        onClick={togglePump}
-        disabled={pumpBusy}
-        className={`pump-fab ${pumpOn ? 'pump-on' : 'pump-off'}`}
-        title={pumpOn ? 'Pump is ON — click to stop' : 'Click to manually activate pump (30s)'}
-      >
-        <Zap size={26} />
-        <span>{pumpBusy ? '…' : pumpOn ? 'PUMP ON' : 'PUMP'}</span>
-      </button>
 
     </div>
   )
