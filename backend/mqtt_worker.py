@@ -158,6 +158,8 @@ async def _process(mqclient: mqtt.Client, raw: str):
         "pump_duration_sec":   ai.get("pump_duration_sec", 0),
         "confidence":          ai.get("confidence", 0),
         "risk_level":          ai.get("risk_level", "unknown"),
+        "pump":                sensor.get("pump", False),
+        "ts":                  datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
     }
 
     await _save_reading(sensor, weather, ai)
@@ -189,22 +191,33 @@ def _on_disconnect(client, userdata, rc):
 
 # ── Entry point called from main.py startup ───────────────────────────────────
 def start():
-    """Start MQTT subscriber in a daemon background thread."""
+    """Start MQTT subscriber in a daemon background thread with auto-restart watchdog."""
     if not BROKER:
         log.warning("MQTT_BROKER not set — mqtt_worker disabled.")
         return
 
     def _run():
-        client = mqtt.Client(client_id="agromind-backend", clean_session=True)
-        client.username_pw_set(MQUSER, MQPASS)
-        client.tls_set(cert_reqs=ssl.CERT_NONE)
-        client.tls_insecure_set(True)
-        client.on_connect    = _on_connect
-        client.on_message    = _on_message
-        client.on_disconnect = _on_disconnect
-        client.connect(BROKER, PORT, keepalive=60)
-        client.loop_forever()
+        while True:  # outer loop = auto-restart on unexpected exit
+            try:
+                client = mqtt.Client(
+                    client_id="agromind-backend",
+                    clean_session=False  # keep subscriptions across brief disconnects
+                )
+                client.username_pw_set(MQUSER, MQPASS)
+                client.tls_set(cert_reqs=ssl.CERT_NONE)
+                client.tls_insecure_set(True)
+                client.reconnect_delay_set(min_delay=2, max_delay=60)
+                client.on_connect    = _on_connect
+                client.on_message    = _on_message
+                client.on_disconnect = _on_disconnect
+                log.info(f"Connecting to MQTT broker {BROKER}:{PORT}")
+                client.connect(BROKER, PORT, keepalive=60)
+                client.loop_forever()  # blocks; auto-reconnects on drop
+            except Exception as e:
+                log.error(f"MQTT worker crashed: {e}. Restarting in 10s...")
+                import time; time.sleep(10)
 
     t = threading.Thread(target=_run, daemon=True, name="mqtt-worker")
     t.start()
     log.info("MQTT worker thread started.")
+
