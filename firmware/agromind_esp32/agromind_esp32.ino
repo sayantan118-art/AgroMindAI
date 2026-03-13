@@ -19,7 +19,7 @@
 #define LED_PIN 2
 
 // ==================== NETWORK CONFIG ====================
-#define WIFI_SSID "***REMOVED***"
+#define WIFI_SSID "***REMOVED***'s laptop"
 #define WIFI_PASS "***REMOVED***"
 
 #define MQTT_BROKER "***REMOVED***"

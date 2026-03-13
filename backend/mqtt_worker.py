@@ -38,6 +38,7 @@ def init(loop: asyncio.AbstractEventLoop, ws_clients: list, db_path: str):
 
 # ── Groq client ───────────────────────────────────────────────────────────────
 _groq = Groq(api_key=GROQ_KEY) if GROQ_KEY else None
+log.info(f"Groq client: {'READY (key set)' if _groq else 'DISABLED (GROQ_API_KEY not set)'}")
 
 # ── Weather helper ────────────────────────────────────────────────────────────
 async def _fetch_weather() -> dict:
@@ -60,6 +61,7 @@ async def _fetch_weather() -> dict:
 # ── Groq decision ─────────────────────────────────────────────────────────────
 def _ask_groq(sensor: dict, weather: dict) -> dict:
     if not _groq:
+        log.error("Groq client is None — GROQ_API_KEY was empty at startup!")
         return {"decision": "SKIP", "health_score": 50, "reason": "Groq not configured",
                 "next_check_minutes": 15, "confidence": 0, "risk_level": "unknown", "pump_duration_sec": 0}
     prompt = (
@@ -84,7 +86,7 @@ def _ask_groq(sensor: dict, weather: dict) -> dict:
             raw = raw.split("```")[1].lstrip("json").strip()
         return json.loads(raw)
     except Exception as e:
-        log.warning(f"Groq failed: {e}")
+        log.error(f"Groq FAILED [{type(e).__name__}]: {e}")
         soil = sensor.get("soil", 50)
         rain = sensor.get("rain", False)
         irrigate = soil < 30 and not rain
@@ -93,8 +95,9 @@ def _ask_groq(sensor: dict, weather: dict) -> dict:
             "health_score": 50, "confidence": 0.5, "risk_level": "caution",
             "pump_duration_sec": 90 if irrigate else 0,
             "next_check_minutes": 10,
-            "reason": "Fallback rule-based (Groq unavailable)"
+            "reason": f"Fallback rule-based (Groq error: {type(e).__name__})"
         }
+
 
 # ── Database write ────────────────────────────────────────────────────────────
 async def _save_reading(sensor: dict, weather: dict, ai: dict):
