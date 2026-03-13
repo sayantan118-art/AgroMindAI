@@ -272,3 +272,45 @@ body {
 }
 .tab-btn.active, .tab-btn:hover { background: #6366f1; color: #fff; border-color: #6366f1; }
 .chart-card { padding: 20px 12px 12px; }
+
+/* ── Floating Pump Button ─────────────────────────────────────────────────── */
+.pump-fab {
+  position: fixed;
+  bottom: 28px;
+  right: 28px;
+  z-index: 200;
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  border: 2px solid;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  gap: 3px;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 20px #0008;
+}
+.pump-fab:hover { transform: scale(1.08); box-shadow: 0 8px 32px #000a; }
+.pump-fab:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+.pump-fab.pump-off {
+  background: #0f172a;
+  border-color: #3b82f6;
+  color: #3b82f6;
+}
+.pump-fab.pump-on {
+  background: #22c55e22;
+  border-color: #22c55e;
+  color: #22c55e;
+  animation: pumpPulse 1.2s infinite;
+}
+@keyframes pumpPulse {
+  0%, 100% { box-shadow: 0 0 0 0 #22c55e44; }
+  50%       { box-shadow: 0 0 0 12px #22c55e00; }
+}
+

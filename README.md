@@ -1,105 +1,131 @@
 # AgroMind AI
 
-**Agentic Cyber-Physical Farming Intelligence System**
+**Agentic Smart Farming System — ESP32 + Cloud Python Backend + React Dashboard**
 
-AgroMind AI autonomously monitors crop conditions and controls irrigation using multi-agent AI reasoning, IoT sensors, and cloud infrastructure.
+AgroMind AI autonomously monitors crop conditions and controls irrigation using AI reasoning, IoT sensors, and a fully cloud-native Python backend — no n8n or local automation tools required.
 
 ---
 
-## Architecture (v3.0 — Cloud-Native)
+## Architecture (v3.0 — Cloud-Native, n8n-Free)
 
 ```
 ESP32 Sensors
-  → MQTT (Mosquitto local / HiveMQ Cloud)
-  → n8n Workflows
-  → FastAPI Backend (Render)
-  → Groq API Multi-Agent System (llama-3.3-70b-versatile)
-  → Validated Irrigation Decision
-  → MQTT Pump Command
-  → ESP32 Relay → Water Pump
-  → Dashboard (React)
+  → HiveMQ Cloud (MQTT broker)
+  → Render Python Backend (mqtt_worker.py)
+      ├─ Open-Meteo API (weather forecast)
+      ├─ Groq API — Llama 3.3 70B (AI irrigation decision)
+      ├─ SQLite (sensor log, pump log, reports)
+      └─ WebSocket broadcast → React Dashboard
+  → MQTT pump command → ESP32 Relay → Water Pump
 ```
+
+**Key change from v2:** n8n workflows are completely removed. All automation (MQTT subscription, AI decision, DB logging, WebSocket broadcast, pump control) runs inside `backend/mqtt_worker.py` on Render.
+
+---
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|------------|
 | Firmware | Arduino C++ (ESP32) |
-| Communication | MQTT (Mosquitto / HiveMQ Cloud) |
-| Automation | n8n Workflows |
-| Backend | FastAPI (Python) on Render |
-| AI | Groq API — llama-3.3-70b-versatile (6 specialized agents) |
+| MQTT Broker | HiveMQ Cloud (TLS 8883) |
+| Backend | FastAPI + Python on Render |
+| AI Pipeline | Groq API — llama-3.3-70b-versatile |
+| Analytics | Pure Python (ET₀, Stress Index, Pest Risk, Irrigation ETA) |
 | Database | SQLite (Render persistent disk) |
 | Dashboard | React + Vite + Recharts |
-| Weather | Open-Meteo API |
+| Weather | Open-Meteo API (free, no key needed) |
+
+---
 
 ## Project Structure
 
 ```
 AgroMindAI/
-├── backend/            # FastAPI backend + multi-agent system
-│   ├── agents/         # 6 AI agents (Groq-powered)
-│   ├── main.py         # API server
-│   ├── agents_endpoint.py
-│   └── requirements.txt
-├── dashboard/          # React dashboard (Vite)
+├── backend/
+│   ├── main.py              # FastAPI server + all API endpoints
+│   ├── mqtt_worker.py       # MQTT subscriber + Groq AI + WebSocket broadcaster
+│   ├── analytics.py         # ET₀, Crop Stress, Pest Risk, Irrigation ETA, Water Usage
+│   ├── crop_config.py       # Crop stage profiles (7 crops × 4 stages)
+│   ├── agents_endpoint.py   # Multi-agent REST API (optional)
+│   ├── agents/              # Specialized AI agents
+│   ├── requirements.txt
+│   └── .env                 # Local secrets (not committed)
+├── dashboard/               # React + Vite dashboard
+│   └── src/App.jsx          # Main dashboard with 7 analytics panels
 ├── firmware/
-│   ├── agromind_esp32/ # ESP32 Arduino sketch
-│   └── MQTT_CONFIG.md  # MQTT broker migration guide
-├── workflows/          # n8n workflow JSON files
-│   ├── workflow-main.json    # Main CPS loop
-│   ├── workflow-health.json  # Health monitor (every 30 min)
-│   └── workflow-report.json  # Daily report (8 AM)
-├── docs/               # Extended documentation
-├── reports/            # Generated farm reports (legacy local)
-├── start_all.bat       # Local dev startup script
-└── mosquitto.conf      # Local MQTT broker config
+│   └── agromind_esp32/      # ESP32 Arduino sketch
+├── docs/                    # Documentation
+├── simulator.py             # Sensor data simulator for testing
+└── start_all.bat            # Local dev startup script
 ```
+
+---
 
 ## Quick Start (Local Dev)
 
 ```powershell
-# 1. Start all local services
+# Start backend + dashboard + ngrok in one click:
 start_all.bat
 
-# 2. Backend available at:
-#    http://localhost:8000/docs
+# Or individually:
+cd backend
+python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
-# 3. Import workflows in n8n (http://localhost:5678)
-#    from: workflows/workflow-main.json etc.
+cd dashboard
+npm run dev
 ```
 
-## AI Agents
+The React dashboard connects to the **Render cloud backend** by default.
+To use your local backend, change `API_BASE` in `dashboard/src/App.jsx`.
 
-The system uses 6 specialized agents powered by Groq (llama-3.3-70b-versatile):
+---
 
-1. **Sensor Interpreter** — Classifies environmental state from raw readings
-2. **Crop Doctor** — Assesses crop health (0–100 score) and stress type
-3. **Weather Intelligence** — Analyzes Open-Meteo forecast for irrigation impact
-4. **Irrigation Planner** — Creates optimal irrigation strategy (6 safety rules)
-5. **Safety Supervisor** — Validates all commands; max 180s pump runtime enforced
-6. **Memory Agent** — Tracks trends in last 5 readings (pure Python, no LLM)
+## Analytics Features
 
-## Safety
+The dashboard displays 7 computed analytics panels from live sensor data:
 
-- Pump runtime is **hard-capped at 180 seconds** in firmware AND by the Safety Supervisor agent
-- Every LLM agent has a **rule-based fallback** — the system never relies solely on AI output
-- Invalid AI responses trigger fallback irrigation logic automatically
+1. **ET₀ Drying Rate** — How fast soil is losing moisture (mm/day)
+2. **Crop Stress Index** — 0–100 plant health score from all 5 sensors
+3. **Pest & Disease Risk** — Fungal risk level from temp + humidity
+4. **Irrigation ETA** — Predicted hours until next irrigation needed
+5. **Water Usage** — Litres used today and this week
+6. **Historical Charts** — 24h and 7-day soil/temp/humidity trends
+7. **Crop Stage Selector** — Set crop type + growth stage; AI adjusts thresholds
 
-## Environment Variables
+---
 
-Copy `backend/.env` and fill in:
+## AI Decision Pipeline
+
+Each sensor reading triggers:
+1. **Open-Meteo** weather lookup (rain probability)
+2. **Groq Llama 3.3** decision: `IRRIGATE / DELAY / SKIP`
+3. If IRRIGATE → MQTT pump command sent to ESP32
+4. All data logged to SQLite + broadcast to dashboard WebSocket
+
+Rule-based fallback activates if Groq is unavailable.
+
+---
+
+## Environment Variables (Render)
+
+Set these in your Render dashboard under **Environment**:
 
 ```
-GROQ_API_KEY=your_groq_api_key
-ALLOWED_ORIGINS=http://localhost:5173,https://your-dashboard.pages.dev
+GROQ_API_KEY=gsk_...
+MQTT_BROKER=***REMOVED***
+MQTT_PORT=8883
+MQTT_USER=***REMOVED***
+MQTT_PASS=your_mqtt_password
 DB_PATH=agromind.db
 LATITUDE=22.5726
 LONGITUDE=88.3639
 ```
 
+---
+
 ## Deployment
 
-- **Backend**: Render Web Service — deploy from `backend/` with persistent disk at `/data`
-- **Dashboard**: Render Static Site or Cloudflare Pages — set `VITE_API_BASE` env var
-- **MQTT**: See `firmware/MQTT_CONFIG.md` for HiveMQ Cloud setup
+- **Backend**: Render Web Service — `backend/` directory, start command: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+- **Dashboard**: Any static host (Netlify, Vercel, Cloudflare Pages) — build `dashboard/` with `npm run build`
+- **MQTT**: HiveMQ Cloud free tier — credentials stored in Render env vars only

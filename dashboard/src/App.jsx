@@ -118,6 +118,8 @@ export default function App() {
   const [chartTab, setChartTab]   = useState('24h')
   const [cropForm, setCropForm]   = useState({ crop: 'generic', stage: 'vegetative' })
   const [cropSaving, setCropSaving] = useState(false)
+  const [pumpOn, setPumpOn]       = useState(false)
+  const [pumpBusy, setPumpBusy]   = useState(false)
   const wsRef = useRef(null)
   const countdown = useRef(null)
   const [remaining, setRemaining] = useState(0)
@@ -194,6 +196,7 @@ export default function App() {
         try {
           const msg = JSON.parse(e.data)
           setData(msg)
+          if (msg.pump !== undefined) setPumpOn(!!msg.pump)
           setOnline(true)
           setLastSeen(new Date().toISOString())
           fetchAnalytics()
@@ -230,6 +233,31 @@ export default function App() {
       await fetchAnalytics()
     } finally { setCropSaving(false) }
   }
+
+  // ── Manual pump toggle (30-second auto-off safety) ────────────────────────
+  const togglePump = async () => {
+    if (pumpBusy) return
+    setPumpBusy(true)
+    const newState = !pumpOn
+    try {
+      await fetch(`${API_BASE}/pump/log`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: newState ? 'ON' : 'OFF', duration_sec: newState ? 30 : 0 })
+      })
+      setPumpOn(newState)
+      if (newState) {
+        setTimeout(async () => {
+          setPumpOn(false)
+          await fetch(`${API_BASE}/pump/log`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'OFF', duration_sec: 0 })
+          })
+        }, 30000)
+      }
+    } catch (e) { console.error('Pump error', e) }
+    finally { setPumpBusy(false) }
+  }
+
 
   // ─── Derived display values ───────────────────────────────────────────────────
   const an = analytics || {}
@@ -419,6 +447,18 @@ export default function App() {
         </div>
 
       </main>
+
+      {/* ─── Floating Pump Button ───────────────────────────────── */}
+      <button
+        onClick={togglePump}
+        disabled={pumpBusy}
+        className={`pump-fab ${pumpOn ? 'pump-on' : 'pump-off'}`}
+        title={pumpOn ? 'Pump is ON — click to stop' : 'Click to manually activate pump (30s)'}
+      >
+        <Zap size={26} />
+        <span>{pumpBusy ? '…' : pumpOn ? 'PUMP ON' : 'PUMP'}</span>
+      </button>
+
     </div>
   )
 }
