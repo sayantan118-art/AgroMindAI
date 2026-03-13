@@ -133,8 +133,9 @@ export default function App() {
   const [data, setData]           = useState(MOCK)
   const [history, setHistory]     = useState([])
   const [analytics, setAnalytics] = useState(null)
-  const [online, setOnline]       = useState(false)
-  const [lastSeen, setLastSeen]   = useState(null)        // real timestamp
+  const [wsConnected, setWsConnected] = useState(false)  // WebSocket open
+  const [lastSeen, setLastSeen]   = useState(null)        // timestamp of last DB reading
+  const [lastWsMsg, setLastWsMsg] = useState(null)        // time of last WS data message
   const [now, setNow]             = useState(new Date())  // live clock
   const [chartTab, setChartTab]   = useState('24h')
   const [cropForm, setCropForm]   = useState({ crop: 'generic', stage: 'vegetative' })
@@ -200,8 +201,8 @@ export default function App() {
       const j = await r.json()
       if (j.soil_moisture !== undefined) {
         setData(j)
-        setOnline(true)
-        setLastSeen(j.ts || new Date().toISOString())
+        // Use DB timestamp only for the 'last reading' display
+        if (j.ts) setLastSeen(j.ts)
       }
     } catch {}
   }, [])
@@ -212,21 +213,23 @@ export default function App() {
     function connect() {
       const ws = new WebSocket(`${WS_BASE}/ws/dashboard`)
       wsRef.current = ws
-      ws.onopen = () => { setOnline(true); console.log('WS connected') }
+      ws.onopen = () => { setWsConnected(true); console.log('WS connected') }
       ws.onmessage = e => {
         try {
           const msg = JSON.parse(e.data)
           setData(msg)
           if (msg.pump !== undefined) setPumpOn(!!msg.pump)
-          setOnline(true)
-          setLastSeen(new Date().toISOString())
+          // Fresh WS message = real live data
+          const now = new Date().toISOString()
+          setLastWsMsg(now)
+          setLastSeen(msg.ts || now)
           fetchAnalytics()
           fetchHistory()
         } catch {}
       }
-      ws.onerror = () => setOnline(false)
+      ws.onerror = () => setWsConnected(false)
       ws.onclose = () => {
-        setOnline(false)
+        setWsConnected(false)
         reconnectTimer = setTimeout(connect, 5000)
       }
     }
@@ -311,8 +314,19 @@ export default function App() {
       <header className="header">
         <div className="header-left">
           <span className="logo">🌱 AgroMind AI</span>
-          <span className={`status-dot ${online ? 'online' : 'offline'}`}/>
-          <span className="status-text">{online ? 'System Online' : 'Offline — Mock Data'}</span>
+          {(() => {
+            const isDataFresh = lastWsMsg && (now - new Date(lastWsMsg)) < 10 * 60 * 1000
+            const dotClass = isDataFresh ? 'online' : wsConnected ? 'stale' : 'offline'
+            const statusText = isDataFresh
+              ? 'Live'
+              : wsConnected
+              ? '⚠ No sensor data'
+              : 'Offline'
+            return (<>
+              <span className={`status-dot ${dotClass}`}/>
+              <span className="status-text">{statusText}</span>
+            </>)
+          })()}
         </div>
         <div className="header-right">
           <span style={{ color: '#64748b', fontSize: '0.8rem' }}>

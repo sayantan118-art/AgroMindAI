@@ -224,6 +224,8 @@ body {
 .status-dot   { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
 .status-dot.online  { background: #22c55e; box-shadow: 0 0 0 3px #22c55e33; animation: pulseG 2s infinite; }
 .status-dot.offline { background: #ef4444; box-shadow: 0 0 0 3px #ef444433; }
+.status-dot.stale   { background: #eab308; box-shadow: 0 0 0 3px #eab30833; animation: pulseY 2s infinite; }
+@keyframes pulseY { 0%,100%{ box-shadow: 0 0 0 0 #eab30844; } 50%{ box-shadow: 0 0 0 7px #eab30800; } }
 .status-text { font-size: 0.85rem; color: #94a3b8; }
 @keyframes pulseG { 0%,100%{ box-shadow: 0 0 0 0 #22c55e44; } 50%{ box-shadow: 0 0 0 7px #22c55e00; } }
 
