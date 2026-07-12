@@ -15,13 +15,16 @@ logger = logging.getLogger(__name__)
 # Initialize router
 router = APIRouter(prefix="/agents", tags=["Multi-Agent System"])
 
-# Initialize orchestrator (singleton)
-# load Groq API key from environment; do not include a default in source control
+# Initialize orchestrator singleton (None if GROQ_API_KEY is missing)
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 if not GROQ_API_KEY:
-    raise RuntimeError("GROQ_API_KEY environment variable is required for AI reasoning")
-
-orchestrator = AgentOrchestrator(GROQ_API_KEY)
+    logger.warning(
+        "GROQ_API_KEY is not set — multi-agent endpoints will return 503. "
+        "Set the variable and restart the server to enable AI features."
+    )
+    orchestrator = None
+else:
+    orchestrator = AgentOrchestrator(GROQ_API_KEY)
 
 
 class SensorInput(BaseModel):
@@ -49,31 +52,37 @@ class AgentDecisionRequest(BaseModel):
 @router.post("/decide")
 async def agent_decision(request: AgentDecisionRequest) -> Dict[str, Any]:
     """
-    Main endpoint for autonomous irrigation decision
-    
-    Processes sensor data through multi-agent system and returns
-    validated irrigation command
+    Main endpoint for autonomous irrigation decision.
+
+    Processes sensor data through the multi-agent system and returns a
+    validated irrigation command. Returns 503 if GROQ_API_KEY is not set.
     """
+    if orchestrator is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Multi-agent system unavailable: GROQ_API_KEY is not configured on this server."
+        )
+
     try:
         logger.info("Received agent decision request")
-        
+
         # Convert Pydantic models to dicts
         sensor_dict = request.sensor_data.model_dump()
         weather_dict = request.weather_data.model_dump() if request.weather_data else {}
-        
+
         # Process through agent pipeline
         result = await orchestrator.process_sensor_data(
             sensor_data=sensor_dict,
             weather_data=weather_dict
         )
-        
+
         logger.info(f"Agent decision complete: {result['final_command']['pump']}")
-        
+
         return {
             "status": "success",
             "decision": result
         }
-        
+
     except Exception as e:
         logger.error(f"Agent decision error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -82,6 +91,12 @@ async def agent_decision(request: AgentDecisionRequest) -> Dict[str, Any]:
 @router.get("/health")
 async def agent_health() -> Dict[str, Any]:
     """Health check for agent system"""
+    if orchestrator is None:
+        return {
+            "status": "unavailable",
+            "reason": "GROQ_API_KEY not configured",
+            "agents": {}
+        }
     return {
         "status": "healthy",
         "agents": {
@@ -99,6 +114,8 @@ async def agent_health() -> Dict[str, Any]:
 @router.post("/memory/clear")
 async def clear_memory() -> Dict[str, str]:
     """Clear agent memory (for testing)"""
+    if orchestrator is None:
+        raise HTTPException(status_code=503, detail="Multi-agent system unavailable.")
     orchestrator.memory.clear_history()
     return {"status": "memory cleared"}
 
@@ -106,4 +123,6 @@ async def clear_memory() -> Dict[str, str]:
 @router.get("/memory/context")
 async def get_memory_context() -> Dict[str, Any]:
     """Get current memory context"""
+    if orchestrator is None:
+        raise HTTPException(status_code=503, detail="Multi-agent system unavailable.")
     return orchestrator.memory.get_context()

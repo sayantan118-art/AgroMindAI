@@ -1,13 +1,12 @@
 """
 mqtt_worker.py — AgroMind AI Background MQTT Subscriber
-Replaces n8n completely. Runs in a background thread when Render starts.
-Subscribes to agromind/sensors, makes Groq AI decisions, logs to DB, and
+Runs in a background thread when the server starts.
+Subscribes to agromind/data, runs the 5-agent AI pipeline, logs to DB, and
 broadcasts real-time data to the React dashboard via WebSocket.
 """
 import os, json, asyncio, threading, ssl, logging, datetime
 import paho.mqtt.client as mqtt
 import httpx
-from groq import Groq
 
 log = logging.getLogger("mqtt_worker")
 logging.basicConfig(level=logging.INFO)
@@ -17,7 +16,6 @@ BROKER   = os.getenv("MQTT_BROKER", "")
 PORT     = int(os.getenv("MQTT_PORT", "8883"))
 MQUSER   = os.getenv("MQTT_USER", "")
 MQPASS   = os.getenv("MQTT_PASS", "")
-GROQ_KEY = os.getenv("GROQ_API_KEY", "")
 DB_PATH  = os.getenv("DB_PATH", "agromind.db")
 LAT      = os.getenv("LATITUDE",  "22.5726")
 LON      = os.getenv("LONGITUDE", "88.3639")
@@ -35,8 +33,8 @@ def init(loop: asyncio.AbstractEventLoop, ws_clients: list, db_path: str):
     _ws_clients = ws_clients
     _db_path = db_path
 
-# ── Groq client ───────────────────────────────────────────────────────────────
-_groq = Groq(api_key=GROQ_KEY) if GROQ_KEY else None
+# ── Groq client (lazy — initialized inside start() after .env is loaded) ─────
+_groq = None
 
 # ── Weather helper ────────────────────────────────────────────────────────────
 async def _fetch_weather() -> dict:
@@ -56,7 +54,7 @@ async def _fetch_weather() -> dict:
         log.warning(f"Weather fetch failed: {e}")
         return {"rain_expected": False, "rain_probability_next_hour": 0}
 
-# ── Groq decision ─────────────────────────────────────────────────────────────
+# ── Groq fallback decision ────────────────────────────────────────────────────
 def _ask_groq(sensor: dict, weather: dict) -> dict:
     if not _groq:
         return {"decision": "SKIP", "health_score": 50, "reason": "Groq not configured",
@@ -147,7 +145,52 @@ async def _process(mqclient: mqtt.Client, raw: str):
 
     sensor  = msg  # keys: soil, temp, hum, light, rain
     weather = await _fetch_weather()
-    ai      = _ask_groq(sensor, weather)
+
+    # ── Try the full 5-agent orchestrator pipeline ────────────────────────
+    ai = None
+    pump_duration_sec = 0
+    try:
+        # Lazy import avoids circular dependency at module level
+        from agents.orchestrator import AgentOrchestrator
+        groq_key = os.getenv("GROQ_API_KEY", "")
+        if groq_key:
+            orch = AgentOrchestrator(groq_api_key=groq_key)
+            # Map short MQTT names → long names expected by the orchestrator
+            sensor_long = {
+                "soil_moisture": sensor.get("soil"),
+                "temperature":   sensor.get("temp"),
+                "humidity":      sensor.get("hum"),
+                "light":         sensor.get("light"),
+                "rain_detected": sensor.get("rain", False),
+            }
+            result = await orch.process_sensor_data(
+                sensor_data=sensor_long,
+                weather_data=weather,
+            )
+            final_cmd     = result.get("final_command", {})
+            crop_health   = result.get("crop_health", {})
+            irr_plan      = result.get("irrigation_plan", {})
+            pump_duration_sec = final_cmd.get("duration_sec", 0)
+            ai = {
+                "decision":           irr_plan.get("decision", "SKIP"),
+                "health_score":       crop_health.get("health_score", 50),
+                "reason":             irr_plan.get("reason") or final_cmd.get("explanation", ""),
+                "next_check_minutes": irr_plan.get("next_check_minutes", 15),
+                "confidence":         irr_plan.get("confidence", 0),
+                "risk_level":         result.get("safety_validation", {}).get("risk_level", "unknown"),
+                "pump_duration_sec":  pump_duration_sec,
+            }
+            log.info(f"Orchestrator decision: {ai['decision']} score={ai['health_score']}")
+        else:
+            log.warning("GROQ_API_KEY not set — orchestrator skipped, using fallback")
+    except Exception as e:
+        log.warning(f"Orchestrator failed ({e}), falling back to _ask_groq()")
+        ai = None
+
+    # ── Fall back to single Groq call if orchestrator unavailable/failed ──
+    if ai is None:
+        ai = _ask_groq(sensor, weather)
+        pump_duration_sec = ai.get("pump_duration_sec", 0)
 
     payload = {
         "soil_moisture":       sensor.get("soil"),
@@ -160,7 +203,7 @@ async def _process(mqclient: mqtt.Client, raw: str):
         "reason":              ai.get("reason", ""),
         "health_score":        ai.get("health_score", 0),
         "next_check_minutes":  ai.get("next_check_minutes", 15),
-        "pump_duration_sec":   ai.get("pump_duration_sec", 0),
+        "pump_duration_sec":   pump_duration_sec,
         "confidence":          ai.get("confidence", 0),
         "risk_level":          ai.get("risk_level", "unknown"),
     }
@@ -169,42 +212,55 @@ async def _process(mqclient: mqtt.Client, raw: str):
     await _broadcast(payload)
 
     # Publish pump command back on the same unified channel
-    if ai.get("decision") == "IRRIGATE" and ai.get("pump_duration_sec", 0) > 0:
+    if ai.get("decision") == "IRRIGATE" and pump_duration_sec > 0:
         pump_msg = json.dumps({
             "type":         "pump",
             "action":       "ON",
-            "duration_sec": ai["pump_duration_sec"]
+            "duration_sec": pump_duration_sec
         })
         mqclient.publish(DATA_TOPIC, pump_msg, qos=1)
-        log.info(f"Pump ON published for {ai['pump_duration_sec']}s on {DATA_TOPIC}")
+        log.info(f"Pump ON published for {pump_duration_sec}s on {DATA_TOPIC}")
 
     log.info(f"Processed: soil={sensor.get('soil')}% decision={ai.get('decision')} score={ai.get('health_score')}")
 
-# ── MQTT callbacks ────────────────────────────────────────────────────────────
-def _on_connect(client, userdata, flags, rc):
-    if rc == 0:
+# ── MQTT callbacks (paho-mqtt v2 signatures) ──────────────────────────────────
+def _on_connect(client, userdata, flags, reason_code, properties):
+    """Called when the client connects to the broker. Subscribes to agromind/data."""
+    if reason_code == 0:
         client.subscribe(DATA_TOPIC, qos=1)
         log.info(f"MQTT connected. Subscribed to '{DATA_TOPIC}'")
     else:
-        log.error(f"MQTT connect failed: rc={rc}")
+        log.error(f"MQTT connect failed: reason_code={reason_code}")
 
 def _on_message(client, userdata, msg):
     raw = msg.payload.decode("utf-8", errors="ignore")
     if _loop:
         asyncio.run_coroutine_threadsafe(_process(client, raw), _loop)
 
-def _on_disconnect(client, userdata, rc):
-    log.warning(f"MQTT disconnected (rc={rc}). Will auto-reconnect.")
+def _on_disconnect(client, userdata, disconnect_flags, reason_code, properties):
+    log.warning(f"MQTT disconnected (reason_code={reason_code}). Will auto-reconnect.")
 
 # ── Entry point called from main.py startup ───────────────────────────────────
 def start():
     """Start MQTT subscriber in a daemon background thread."""
+    global _groq
+
     if not BROKER:
         log.warning("MQTT_BROKER not set — mqtt_worker disabled.")
         return
 
+    # Initialize Groq client here so load_dotenv() in main.py runs first
+    groq_key = os.getenv("GROQ_API_KEY", "")
+    if groq_key:
+        from groq import Groq
+        _groq = Groq(api_key=groq_key)
+        log.info("Groq client initialized.")
+    else:
+        log.warning("GROQ_API_KEY not set — AI features will use fallback logic.")
+
     def _run():
-        client = mqtt.Client(client_id="agromind-backend", clean_session=True)
+        client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2,
+                             client_id="agromind-backend", clean_session=True)
         client.username_pw_set(MQUSER, MQPASS)
         client.tls_set(cert_reqs=ssl.CERT_NONE)
         client.tls_insecure_set(True)

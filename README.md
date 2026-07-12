@@ -2,110 +2,219 @@
 
 **Agentic Cyber-Physical Farming Intelligence System**
 
-AgroMind AI autonomously monitors crop conditions and controls irrigation using multi-agent AI reasoning, IoT sensors, and cloud infrastructure.
+AgroMind AI autonomously monitors crop conditions and controls irrigation using a 5-agent AI pipeline, IoT sensors, and cloud infrastructure — no n8n, no Mosquitto, no ngrok required.
 
 ---
 
-## Architecture (v3.0 — Cloud-Native)
+## Architecture
 
-```text
-ESP32 Sensors
-  → MQTT (Mosquitto local / HiveMQ Cloud)
-  → FastAPI backend with built-in MQTT worker
-  → Groq-powered multi-agent decision engine
-  → Validated irrigation decision
-  → MQTT pump command
-  → ESP32 relay → water pump
-  → React dashboard
 ```
+ESP32 / Simulator
+  → HiveMQ Cloud MQTT (agromind/data, TLS port 8883)
+  → FastAPI backend  (mqtt_worker.py subscribes in background)
+  → 5-Agent AI pipeline  (AgentOrchestrator)
+       ├─ Sensor Interpreter   – classifies environmental state
+       ├─ Crop Doctor          – scores crop health (0-100)
+       ├─ Weather Intelligence – reads Open-Meteo forecast
+       ├─ Irrigation Planner   – decides IRRIGATE / DELAY / SKIP
+       └─ Safety Supervisor    – validates & caps pump runtime
+  → MQTT pump command  (agromind/data, type=pump)
+  → WebSocket broadcast
+  → React dashboard    (real-time sensor + AI data)
+```
+
+---
 
 ## Tech Stack
 
 | Layer | Technology |
-|-------|------------|
+|---|---|
 | Firmware | Arduino C++ (ESP32) |
-| Communication | MQTT (Mosquitto / HiveMQ Cloud) |
-| Backend | FastAPI (Python) with Uvicorn |
-| AI | Groq API — llama-3.3-70b-versatile (6 specialized agents) |
-| Database | SQLite |
-| Dashboard | React + Vite + Recharts |
-| Weather | Open-Meteo API |
+| Communication | MQTT over TLS — HiveMQ Cloud (port 8883) |
+| Backend | FastAPI + Uvicorn (Python) |
+| AI | Groq API — llama-3.3-70b-versatile |
+| Database | SQLite via aiosqlite |
+| Dashboard | React 18 + Vite + Recharts + Tailwind CSS |
+| Weather | Open-Meteo API (free, no key needed) |
+| Deployment | Render (backend) + Vercel (dashboard) |
+
+---
 
 ## Project Structure
 
-```text
+```
 AgroMindAI/
-├── backend/                  # FastAPI backend + multi-agent system
-│   ├── agents/               # AI agents and orchestrator
-│   ├── agents_endpoint.py    # Agent API endpoints
-│   ├── main.py               # API server entry point
-│   ├── mqtt_worker.py        # Background MQTT subscriber
-│   └── requirements.txt
-├── dashboard/                # React dashboard (Vite)
-├── docs/                     # Project documentation
-├── firmware/                 # ESP32 Arduino sketch and MQTT notes
-├── simulator.py              # Local simulation helper
-├── start_all.bat             # Local development startup script
+├── backend/
+│   ├── agents/                  # 5-agent AI pipeline
+│   │   ├── base_agent.py        # Shared base class (Groq HTTP calls)
+│   │   ├── sensor_interpreter.py
+│   │   ├── crop_doctor.py
+│   │   ├── weather_intelligence.py
+│   │   ├── irrigation_planner.py
+│   │   ├── safety_supervisor.py
+│   │   ├── memory_agent.py      # In-process short-term memory
+│   │   ├── orchestrator.py      # Coordinates the full pipeline
+│   │   └── README.md
+│   ├── agents_endpoint.py       # /agents/* REST API
+│   ├── main.py                  # FastAPI app entry point
+│   ├── mqtt_worker.py           # Background MQTT subscriber + AI dispatch
+│   ├── requirements.txt
+│   ├── .env                     # Local env vars (not committed)
+│   └── agromind.db              # SQLite database
+├── dashboard/
+│   ├── src/
+│   │   ├── App.jsx              # Main React component
+│   │   └── main.jsx
+│   ├── vercel.json              # Vercel SPA rewrite rule
+│   ├── vite.config.js
+│   └── package.json
+├── firmware/
+│   └── agromind_esp32/
+│       ├── agromind_esp32.ino   # ESP32 Arduino sketch
+│       └── secrets.h.example   # WiFi + MQTT credentials template
+├── docs/
+│   ├── MULTI_AGENT_SYSTEM.md   # Agent pipeline details
+│   ├── SYSTEM_ARCHITECTURE.md  # Full architecture reference
+│   └── HARDWARE_SHOPPING_LIST.md
+├── simulator.py                 # Sends mock sensor data via MQTT
+├── start_all.bat                # Windows one-click dev startup
 └── README.md
 ```
 
-## Quick Start (Local Dev)
+---
+
+## Quick Start (Local Dev — no ESP32 needed)
+
+**Prerequisites:** Python 3.10+, Node.js 18+
 
 ```powershell
-# 1. Install backend dependencies
+# 1. Clone and enter the project
+cd "C:\My files\projectss\AgroMindAI"
+
+# 2. Install backend dependencies
 cd backend
 pip install -r requirements.txt
 
-# 2. Install dashboard dependencies
-cd ../dashboard
+# 3. Configure environment variables
+#    Copy the example and fill in your values (see section below)
+copy .env .env.local   # already present; just add GROQ_API_KEY
+
+# 4. Install dashboard dependencies
+cd ..\dashboard
 npm install
 
-# 3. Start local services
+# 5. Start everything
 cd ..
 start_all.bat
-
-# 4. Open the dashboard and backend docs
-#    Backend: http://localhost:8000/docs
-#    Dashboard: http://localhost:5173
 ```
 
-> The current implementation uses the built-in MQTT worker in the backend rather than a separate n8n workflow engine.
+`start_all.bat` opens three terminal windows:
+- Window 1 — FastAPI backend on `http://localhost:8000`
+- Window 2 — React dashboard on `http://localhost:5173`
+- Window 3 — Sensor simulator (publishes fake readings to HiveMQ)
 
-## AI Agents
-
-The system uses 6 specialized agents powered by Groq (llama-3.3-70b-versatile):
-
-1. **Sensor Interpreter** — Classifies environmental state from raw readings
-2. **Crop Doctor** — Assesses crop health (0–100 score) and stress type
-3. **Weather Intelligence** — Analyzes Open-Meteo forecast for irrigation impact
-4. **Irrigation Planner** — Creates an irrigation strategy with safety rules
-5. **Safety Supervisor** — Validates commands and enforces the pump runtime limit
-6. **Memory Agent** — Tracks recent trends in sensor history
-
-## Safety
-
-- Pump runtime is hard-capped at 180 seconds in the control flow and safety validation
-- Each LLM-based agent has a rule-based fallback path
-- Invalid AI responses trigger fallback irrigation logic automatically
+---
 
 ## Environment Variables
 
-Create a backend/.env file and provide values such as:
+Create (or edit) `backend/.env`:
 
-```env
-GROQ_API_KEY=your_groq_api_key
-ALLOWED_ORIGINS=http://localhost:5173,https://your-dashboard.pages.dev
-DB_PATH=agromind.db
+```dotenv
+# ── MQTT (HiveMQ Cloud) ──────────────────────────────────────
+MQTT_BROKER=<your-hivemq-host>.hivemq.cloud
+MQTT_PORT=8883
+MQTT_USER=<hivemq-username>
+MQTT_PASS=<hivemq-password>
+
+# ── Groq AI ──────────────────────────────────────────────────
+# Get a free key at https://console.groq.com/keys
+# Without this, the system uses rule-based fallback logic.
+GROQ_API_KEY=
+
+# ── Location for weather forecast (Open-Meteo) ───────────────
 LATITUDE=22.5726
 LONGITUDE=88.3639
-MQTT_BROKER=your_broker_host
-MQTT_PORT=8883
-MQTT_USER=your_username
-MQTT_PASS=your_password
+
+# ── Database ─────────────────────────────────────────────────
+DB_PATH=agromind.db
 ```
+
+| Variable | Description |
+|---|---|
+| `MQTT_BROKER` | HiveMQ Cloud hostname |
+| `MQTT_PORT` | TLS port — usually `8883` |
+| `MQTT_USER` | HiveMQ username |
+| `MQTT_PASS` | HiveMQ password |
+| `GROQ_API_KEY` | Groq API key for the AI pipeline |
+| `LATITUDE` | Decimal latitude for weather queries |
+| `LONGITUDE` | Decimal longitude for weather queries |
+| `DB_PATH` | SQLite database filename (relative to `backend/`) |
+
+---
+
+## AI Agents
+
+The full pipeline runs automatically for every incoming sensor message.
+
+| # | Agent | Role |
+|---|---|---|
+| 1 | Sensor Interpreter | Classifies soil status, heat stress, evaporation risk |
+| 2 | Crop Doctor | Scores crop health 0–100, diagnoses stress type |
+| 3 | Weather Intelligence | Reads Open-Meteo forecast, determines irrigation impact |
+| 4 | Irrigation Planner | Decides IRRIGATE / DELAY / SKIP, calculates pump duration |
+| 5 | Safety Supervisor | Validates command, enforces pump runtime cap (180 s max) |
+| 6 | Memory Agent | Tracks last 5 readings, detects soil/temp trends |
+
+Each agent has a rule-based fallback — if Groq is unavailable the system keeps working.
+
+---
+
+## Safety Features
+
+- Pump runtime hard-capped at 180 seconds in Safety Supervisor
+- Maximum 10 irrigation events per day enforced by Safety Supervisor
+- Sensor validity range checks before any irrigation decision
+- Every agent has a deterministic fallback path — no single point of failure
+- If `GROQ_API_KEY` is missing, the system falls back to rule-based logic automatically
+
+---
 
 ## Deployment
 
-- **Backend**: Render Web Service or another Python host; deploy from the backend folder
-- **Dashboard**: Vite static build deployed to Render, Cloudflare Pages, or similar
-- **MQTT**: Configure a broker such as Mosquitto or HiveMQ Cloud and set the MQTT environment variables
+### Backend → Render
+
+1. Create a new **Web Service** pointing to the `backend/` folder.
+2. Set **Start command**: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+3. Add all environment variables from the table above in the Render dashboard.
+
+### Dashboard → Vercel
+
+`dashboard/vercel.json` already contains the SPA rewrite rule.
+
+```bash
+cd dashboard
+vercel --prod
+```
+
+Set `VITE_API_BASE` and `VITE_WS_BASE` in the Vercel project settings to point at your Render backend URL.
+
+### MQTT Broker
+
+Use [HiveMQ Cloud](https://www.hivemq.com/mqtt-cloud-broker/) free tier.  
+Topic: `agromind/data` (both sensor publishes and pump commands use this single topic).
+
+---
+
+## API Reference (quick)
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/health` | Backend health check |
+| `GET` | `/sensor/latest` | Most recent sensor reading |
+| `GET` | `/sensor/history` | Historical readings |
+| `GET` | `/weather/forecast` | Current Open-Meteo forecast |
+| `POST` | `/agents/decide` | Run the full agent pipeline manually |
+| `GET` | `/agents/health` | Agent system status |
+| `WS` | `/ws/dashboard` | Real-time WebSocket stream |
+
+Full interactive docs available at `http://localhost:8000/docs`.
