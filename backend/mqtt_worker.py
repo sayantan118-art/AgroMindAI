@@ -108,7 +108,7 @@ async def _save_reading(sensor: dict, weather: dict, ai: dict):
              sensor.get("light"), int(sensor.get("rain", False)),
              int(weather.get("rain_expected", False)),
              ai.get("decision", "SKIP"), ai.get("reason", ""),
-             ai.get("health_score", 0), ai.get("next_check_minutes", 15),
+             ai.get("health_score") or sensor.get("health_score", 0), ai.get("next_check_minutes", 15),
              ai.get("pump_duration_sec", 0), ai.get("confidence", 0),
              ai.get("risk_level", "unknown"))
         )
@@ -201,7 +201,8 @@ async def _process(mqclient: mqtt.Client, raw: str):
         "rain_expected":       weather.get("rain_expected", False),
         "decision":            ai.get("decision", "SKIP"),
         "reason":              ai.get("reason", ""),
-        "health_score":        ai.get("health_score", 0),
+        # Use simulator's pre-computed health score as fallback when AI returns 0
+        "health_score":        ai.get("health_score") or sensor.get("health_score", 0),
         "next_check_minutes":  ai.get("next_check_minutes", 15),
         "pump_duration_sec":   pump_duration_sec,
         "confidence":          ai.get("confidence", 0),
