@@ -159,7 +159,7 @@ void reconnectMQTT() {
 
     Serial.println("connected");
 
-    mqttClient.subscribe("agromind/pump");
+    mqttClient.subscribe("agromind/data");
 
   } else {
 
@@ -180,10 +180,17 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   Serial.print("MQTT Message: ");
   Serial.println(message);
 
-  if (String(topic) == "agromind/pump") {
+  if (String(topic) == "agromind/data") {
 
-    if (message == "ON") controlPump(true);
-    if (message == "OFF") controlPump(false);
+    // Only act on pump-type messages
+    StaticJsonDocument<128> cmd;
+    if (deserializeJson(cmd, message) == DeserializationError::Ok) {
+      if (String((const char*)cmd["type"]) == "pump") {
+        String action = cmd["action"] | "";
+        if (action == "ON")  controlPump(true);
+        if (action == "OFF") controlPump(false);
+      }
+    }
   }
 }
 
@@ -206,17 +213,18 @@ void publishSensorData() {
 
   StaticJsonDocument<256> doc;
 
-  doc["soil"] = soilMoisture;
-  doc["temp"] = temperature;
-  doc["hum"] = humidity;
+  doc["type"]  = "sensor";    // unified channel message type
+  doc["soil"]  = soilMoisture;
+  doc["temp"]  = temperature;
+  doc["hum"]   = humidity;
   doc["light"] = lightLevel;
-  doc["rain"] = rainDetected;
-  doc["pump"] = pumpActive;
+  doc["rain"]  = rainDetected;
+  doc["pump"]  = pumpActive;
 
   char buffer[256];
   serializeJson(doc, buffer);
 
-  if (mqttClient.publish("agromind/sensors", buffer)) {
+  if (mqttClient.publish("agromind/data", buffer)) {
 
     Serial.println(buffer);
 

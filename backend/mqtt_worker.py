@@ -21,8 +21,7 @@ GROQ_KEY = os.getenv("GROQ_API_KEY", "")
 DB_PATH  = os.getenv("DB_PATH", "agromind.db")
 LAT      = os.getenv("LATITUDE",  "22.5726")
 LON      = os.getenv("LONGITUDE", "88.3639")
-SENSOR_TOPIC = "agromind/sensors"
-PUMP_TOPIC   = "agromind/pump"
+DATA_TOPIC = "agromind/data"   # single unified channel for all messages
 
 # ── Shared state (set by main.py after app starts) ───────────────────────────
 _loop: asyncio.AbstractEventLoop | None = None
@@ -136,11 +135,17 @@ async def _broadcast(payload: dict):
 # ── Main processing coroutine (runs on the event loop) ───────────────────────
 async def _process(mqclient: mqtt.Client, raw: str):
     try:
-        sensor = json.loads(raw)
+        msg = json.loads(raw)
     except Exception:
         log.warning(f"Invalid JSON from MQTT: {raw}")
         return
 
+    # Ignore non-sensor messages on the unified channel (e.g. pump echoes)
+    if msg.get("type") != "sensor":
+        log.info(f"Ignored non-sensor message: type={msg.get('type')}")
+        return
+
+    sensor  = msg  # keys: soil, temp, hum, light, rain
     weather = await _fetch_weather()
     ai      = _ask_groq(sensor, weather)
 
@@ -163,19 +168,23 @@ async def _process(mqclient: mqtt.Client, raw: str):
     await _save_reading(sensor, weather, ai)
     await _broadcast(payload)
 
-    # Trigger pump via MQTT if decision is IRRIGATE
+    # Publish pump command back on the same unified channel
     if ai.get("decision") == "IRRIGATE" and ai.get("pump_duration_sec", 0) > 0:
-        pump_msg = json.dumps({"action": "ON", "duration_sec": ai["pump_duration_sec"]})
-        mqclient.publish(PUMP_TOPIC, pump_msg, qos=1)
-        log.info(f"Pump ON published for {ai['pump_duration_sec']}s")
+        pump_msg = json.dumps({
+            "type":         "pump",
+            "action":       "ON",
+            "duration_sec": ai["pump_duration_sec"]
+        })
+        mqclient.publish(DATA_TOPIC, pump_msg, qos=1)
+        log.info(f"Pump ON published for {ai['pump_duration_sec']}s on {DATA_TOPIC}")
 
     log.info(f"Processed: soil={sensor.get('soil')}% decision={ai.get('decision')} score={ai.get('health_score')}")
 
 # ── MQTT callbacks ────────────────────────────────────────────────────────────
 def _on_connect(client, userdata, flags, rc):
     if rc == 0:
-        client.subscribe(SENSOR_TOPIC, qos=1)
-        log.info(f"MQTT connected. Subscribed to '{SENSOR_TOPIC}'")
+        client.subscribe(DATA_TOPIC, qos=1)
+        log.info(f"MQTT connected. Subscribed to '{DATA_TOPIC}'")
     else:
         log.error(f"MQTT connect failed: rc={rc}")
 

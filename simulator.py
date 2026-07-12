@@ -30,7 +30,7 @@ BROKER   = os.getenv("MQTT_BROKER", "")
 PORT     = int(os.getenv("MQTT_PORT", "8883"))
 MQUSER   = os.getenv("MQTT_USER", "")
 MQPASS   = os.getenv("MQTT_PASS", "")
-TOPIC    = "agromind/sensors"
+TOPIC    = "agromind/data"   # unified channel
 INTERVAL = 30  # seconds between publishes
 
 if not BROKER:
@@ -70,6 +70,7 @@ def next_reading():
     rain  = random.random() < 0.1  # 10% chance of rain event
 
     return {
+        "type":  "sensor",       # unified channel message type
         "soil":  round(moisture, 1),
         "temp":  round(temp, 1),
         "hum":   round(hum, 1),
@@ -87,7 +88,7 @@ def on_connect(client, userdata, flags, rc, properties=None):
 def on_publish(client, userdata, mid, rc=None, properties=None):
     pass
 
-def on_disconnect(client, userdata, rc, properties=None):
+def on_disconnect(client, userdata, disconnect_flags, rc, properties=None):
     print(f"[Simulator] Disconnected (rc={rc}). Will reconnect on next loop.")
 
 # ── Main loop ─────────────────────────────────────────────────────────────────
