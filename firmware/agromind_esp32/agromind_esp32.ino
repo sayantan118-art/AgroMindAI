@@ -8,6 +8,7 @@
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 #include <DHT.h>
+#include "secrets.h"  // WiFi + MQTT credentials — gitignored, never commit
 
 // ==================== PIN DEFINITIONS ====================
 #define SOIL_MOISTURE_PIN 34
@@ -19,13 +20,8 @@
 #define LED_PIN 2
 
 // ==================== NETWORK CONFIG ====================
-#define WIFI_SSID "Sayantan's Mobile"
-#define WIFI_PASS "sayantan"
-
-#define MQTT_BROKER "ca00f7c09b924f9dba1292f9e449fc12.s1.eu.hivemq.cloud"
-#define MQTT_PORT 8883
-#define MQTT_USER "ranar110"
-#define MQTT_PASS "Paspor2132"
+// All credentials are defined in secrets.h (gitignored)
+// See secrets.h.example for the required format
 
 // ==================== SENSOR CONFIG ====================
 #define DHT_TYPE DHT22

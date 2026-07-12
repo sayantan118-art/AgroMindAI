@@ -14,3 +14,6 @@ ngrok.exe
 ngrok
 # n8n workflows kept locally only (may contain secrets)
 workflows/
+
+# ESP32 firmware secrets — never commit real credentials
+firmware/**/secrets.h

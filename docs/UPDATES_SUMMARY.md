@@ -67,13 +67,9 @@
   - Relay → GPIO 26 (digital)
   - LED → GPIO 2 (built-in)
 
-- ✅ WiFi Configuration:
-  ```cpp
-  #define WIFI_SSID "Sayantan's Mobile"
-  #define WIFI_PASS "sayantan"
-  #define MQTT_BROKER "10.64.168.176"
-  #define MQTT_PORT 1883
-  ```
+- ✅ WiFi + MQTT Configuration:
+  Credentials are stored in `firmware/agromind_esp32/secrets.h` (gitignored).
+  See `secrets.h.example` for the required format.
 
 - ✅ Features:
   - Publishes to `agromind/sensors` every 10 seconds
