@@ -17,3 +17,7 @@ workflows/
 
 # ESP32 firmware secrets — never commit real credentials
 firmware/**/secrets.h
+
+# Temp files from credential cleanup tooling
+bfg_secrets.txt
+credentials_replacements.txt
