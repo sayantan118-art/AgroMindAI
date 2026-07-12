@@ -5,8 +5,8 @@ import {
 import { Droplets, Thermometer, Wind, Sun, CloudRain, Zap, Activity } from 'lucide-react'
 import './App.css'
 
-const API_BASE = 'https://agromindai-q5m4.onrender.com'
-const WS_BASE = 'wss://agromindai-q5m4.onrender.com'
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
+const WS_BASE  = import.meta.env.VITE_WS_BASE  || 'ws://localhost:8000'
 
 // ─── Mock / fallback data ────────────────────────────────────────────────────
 const MOCK = {
