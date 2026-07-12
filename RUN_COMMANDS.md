@@ -1,10 +1,10 @@
-# AgroMind AI - Exact Commands to Run
+﻿# AgroMind AI - Exact Commands to Run
 
 ## 🚀 FASTEST WAY (Recommended)
 
 ### Double-click this file:
 ```
-C:\My files\AroMindAI\start_all.bat
+C:\My files\AgroMindAI\start_all.bat
 ```
 
 **That's it!** All 6 services will start automatically.
@@ -25,7 +25,7 @@ net start mosquitto
 
 ### Window 2: FastAPI Backend
 ```powershell
-cd "C:\My files\AroMindAI\backend"
+cd "C:\My files\AgroMindAI\backend"
 C:\Python314\python.exe -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 ✅ Should show: "Uvicorn running on http://0.0.0.0:8000"
@@ -42,7 +42,7 @@ n8n start
 
 ### Window 4: Build & Serve Dashboard
 ```powershell
-cd "C:\My files\AroMindAI\dashboard"
+cd "C:\My files\AgroMindAI\dashboard"
 npm run build
 serve -s dist -l 5173
 ```
@@ -52,7 +52,7 @@ serve -s dist -l 5173
 
 ### Window 5: ngrok Public Tunnel
 ```powershell
-cd "C:\My files\AroMindAI"
+cd "C:\My files\AgroMindAI"
 .\ngrok.exe http 5173
 ```
 ✅ Should show: "Forwarding https://[random-id].ngrok-free.app -> http://localhost:5173"
@@ -141,7 +141,7 @@ C:\Python314\python.exe --version
 C:\Python314\python.exe -m pip list | findstr uvicorn
 
 # Check .env file exists
-cat "C:\My files\AroMindAI\backend\.env"
+cat "C:\My files\AgroMindAI\backend\.env"
 
 # Check GROQ_API_KEY is set
 $env:GROQ_API_KEY
@@ -149,7 +149,7 @@ $env:GROQ_API_KEY
 
 ### Dashboard Won't Build?
 ```powershell
-cd "C:\My files\AroMindAI\dashboard"
+cd "C:\My files\AgroMindAI\dashboard"
 
 # Check npm is installed
 npm --version
@@ -173,7 +173,7 @@ ls "C:\My files\ngrok.exe"
 ping google.com
 
 # Try running ngrok manually
-cd "C:\My files\AroMindAI"
+cd "C:\My files\AgroMindAI"
 .\ngrok.exe http 5173
 
 # If it closes, check ngrok is authenticated
@@ -201,7 +201,7 @@ net start mosquitto
 ```powershell
 # If backend is running in a window, you'll see logs there
 # Or check the database:
-sqlite3 "C:\My files\AroMindAI\backend\agromind.db" "SELECT * FROM sensor_logs ORDER BY timestamp DESC LIMIT 5;"
+sqlite3 "C:\My files\AgroMindAI\backend\agromind.db" "SELECT * FROM sensor_logs ORDER BY timestamp DESC LIMIT 5;"
 ```
 
 ### Watch MQTT Messages
@@ -291,7 +291,7 @@ net stop mosquitto
 
 ## 🎯 NEXT STEPS
 
-1. **Run**: `C:\My files\AroMindAI\start_all.bat`
+1. **Run**: `C:\My files\AgroMindAI\start_all.bat`
 2. **Wait**: ~15 seconds for all services to start
 3. **Check**: http://localhost:5173 should show dashboard
 4. **Verify**: All 6 terminal windows should be open
@@ -310,4 +310,4 @@ net stop mosquitto
 
 ---
 
-**Ready to start? Run: `C:\My files\AroMindAI\start_all.bat`**
+**Ready to start? Run: `C:\My files\AgroMindAI\start_all.bat`**

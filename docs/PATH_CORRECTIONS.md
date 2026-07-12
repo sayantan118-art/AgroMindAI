@@ -2,13 +2,13 @@
 
 ## Correct Project Path
 ```
-C:\My files\AroMindAI\
+C:\My files\AgroMindAI\
 ```
 
 **Note**: The path uses:
 - Lowercase "files" (not "Files")
 - Space between "My" and "files"
-- "AroMindAI" spelling (not "AgroMindAI")
+- "AgroMindAI" spelling (correct name)
 
 ## Files Updated
 
@@ -22,9 +22,9 @@ cwd: "C:\\MyFiles\\AgroMindAI\\dashboard"
 
 **New paths:**
 ```javascript
-cwd: "C:\\My files\\AroMindAI\\backend"
-script: "C:\\My files\\AroMindAI\\backend\\venv\\Scripts\\python.exe"
-cwd: "C:\\My files\\AroMindAI\\dashboard"
+cwd: "C:\\My files\\AgroMindAI\\backend"
+script: "C:\\My files\\AgroMindAI\\backend\\venv\\Scripts\\python.exe"
+cwd: "C:\\My files\\AgroMindAI\\dashboard"
 ```
 
 ### 2. workflow-report.json ✅
@@ -35,7 +35,7 @@ cwd: "C:\\My files\\AroMindAI\\dashboard"
 
 **New path:**
 ```json
-"fileName": "=C:\\My files\\AroMindAI\\reports\\report_{{ $now.toFormat('yyyy-MM-dd') }}.txt"
+"fileName": "=C:\\My files\\AgroMindAI\\reports\\report_{{ $now.toFormat('yyyy-MM-dd') }}.txt"
 ```
 
 ### 3. start_all.bat ✅
@@ -43,20 +43,18 @@ cwd: "C:\\My files\\AroMindAI\\dashboard"
 ```bat
 cd C:\MyFiles\AgroMindAI\backend
 serve -s C:\MyFiles\AgroMindAI\dashboard\dist -l 5173
-C:\MyFiles\AgroMindAI\(legacy ngrok)
 ```
 
-**New paths (ngrok step is now legacy/optional):**
+**New paths:**
 ```bat
-cd C:\My files\AroMindAI\backend
-serve -s C:\My files\AroMindAI\dashboard\dist -l 5173
-# ngrok.exe http 5173 (only needed for legacy tunneling)
+cd C:\My files\AgroMindAI\backend
+serve -s C:\My files\AgroMindAI\dashboard\dist -l 5173
 ```
 
 ### 4. UPDATES_SUMMARY.md ✅
 Added project path reference at the top:
 ```markdown
-## Project Path: C:\My files\AroMindAI
+## Project Path: C:\My files\AgroMindAI
 ```
 
 ## Files That Don't Need Updates
@@ -66,8 +64,6 @@ Added project path reference at the top:
 - `workflow-health.json` - Uses localhost (correct for local n8n)
 - `workflow-sync.json` - Uses localhost (correct for local n8n)
 
-These files use `localhost:8000` which is correct because n8n runs on the same machine as the backend.
-
 ### Dashboard Files (Correct as-is)
 - `dashboard/src/App.jsx` - Uses cloud URL (correct for remote access)
 - `dashboard/vite.config.js` - Uses localhost proxy (correct for development)
@@ -76,76 +72,66 @@ These files use `localhost:8000` which is correct because n8n runs on the same m
 - `backend/main.py` - No hardcoded paths
 - `backend/.env` - Uses relative paths and localhost
 
-### Documentation Files
-- `Implementation Plan` - Contains old paths but is reference documentation
-- `temp.json` - Contains old paths but is temporary/backup file
-- `Walkthrough` - Contains old paths but is reference documentation
-
 ## Verification Commands
 
 ### Check Current Directory
 ```powershell
 Get-Location | Select-Object -ExpandProperty Path
-# Should output: C:\My files\AroMindAI
+# Should output: C:\My files\AgroMindAI
 ```
 
 ### Verify Backend Path
 ```powershell
-Test-Path "C:\My files\AroMindAI\backend\main.py"
+Test-Path "C:\My files\AgroMindAI\backend\main.py"
 # Should return: True
 ```
 
 ### Verify Dashboard Path
 ```powershell
-Test-Path "C:\My files\AroMindAI\dashboard\package.json"
+Test-Path "C:\My files\AgroMindAI\dashboard\package.json"
 # Should return: True
 ```
 
 ### Verify Firmware Path
 ```powershell
-Test-Path "C:\My files\AroMindAI\firmware\agromind_esp32.ino"
+Test-Path "C:\My files\AgroMindAI\firmware\agromind_esp32\agromind_esp32.ino"
 # Should return: True
 ```
 
 ## Common Path Mistakes to Avoid
 
 ❌ **Wrong:**
-- `C:\MyFiles\AgroMindAI\` (capital F, no space, wrong spelling)
-- `C:\My Files\AgroMindAI\` (capital F, wrong spelling)
-- `C:\My files\AgroMindAI\` (wrong spelling)
+- `C:\MyFiles\AgroMindAI\` (capital F, no space)
+- `C:\My Files\AgroMindAI\` (capital F)
+- `C:\My files\AroMindAI\` (missing 'g' — old typo)
 
 ✅ **Correct:**
-- `C:\My files\AroMindAI\` (lowercase f, space, correct spelling)
+- `C:\My files\AgroMindAI\` (lowercase f, space, correct spelling)
 
 ## Git Status
 
 - ✅ All path corrections committed
-- ✅ Pushed to GitHub (commit c18e103)
-- ✅ 4 files changed, 9 insertions, 8 deletions
+- ✅ Pushed to GitHub
+- ✅ AroMindAI → AgroMindAI rename applied across all files
 
-## Next Steps
+## Using the Path in Code
 
-When creating new scripts or configuration files, always use:
-```
-C:\My files\AroMindAI\
-```
-
-For PowerShell scripts, escape backslashes:
+For PowerShell scripts:
 ```powershell
-$projectPath = "C:\My files\AroMindAI"
+$projectPath = "C:\My files\AgroMindAI"
 ```
 
 For JSON/JavaScript, double-escape backslashes:
 ```json
-"path": "C:\\My files\\AroMindAI\\backend"
+"path": "C:\\My files\\AgroMindAI\\backend"
 ```
 
 For batch files, use single backslashes:
 ```bat
-cd C:\My files\AroMindAI\backend
+cd C:\My files\AgroMindAI\backend
 ```
 
 ---
 
-**Last Updated**: March 9, 2026
-**Status**: ✅ All critical paths corrected and verified
+**Last Updated**: July 12, 2026
+**Status**: ✅ All paths corrected and verified

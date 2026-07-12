@@ -1,4 +1,4 @@
-@echo off
+﻿@echo off
 setlocal enabledelayedexpansion
 echo =========================================
 echo    AgroMind AI v3.0 - Full Stack Startup
@@ -6,7 +6,7 @@ echo =========================================
 echo.
 
 REM Set project root
-set PROJECT_ROOT=C:\My files\AroMindAI
+set PROJECT_ROOT=C:\My files\AgroMindAI
 
 echo [1] Starting Mosquitto MQTT Broker...
 start "Mosquitto" cmd /k "net start mosquitto"

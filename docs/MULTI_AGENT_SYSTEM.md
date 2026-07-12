@@ -1,4 +1,4 @@
-# AgroMind AI - Multi-Agent System Implementation
+﻿# AgroMind AI - Multi-Agent System Implementation
 
 ## 🎯 Overview
 
@@ -273,7 +273,7 @@ return [{
 
 ### Start Backend with Agents
 ```bash
-cd "C:\My files\AroMindAI\backend"
+cd "C:\My files\AgroMindAI\backend"
 .\venv\Scripts\activate
 uvicorn main:app --host 0.0.0.0 --port 8000
 ```

@@ -1,4 +1,4 @@
-# AgroMind AI - Fixes Applied (Session Summary)
+﻿# AgroMind AI - Fixes Applied (Session Summary)
 
 ## Problem Statement
 The `start_all.bat` script was not starting any services. The system needed comprehensive fixes to ensure all components start correctly and work together.
@@ -29,12 +29,12 @@ The `start_all.bat` script was not starting any services. The system needed comp
 
 **Before:**
 ```batch
-start "Backend" /min cmd /c "cd /d "C:\My files\AroMindAI\backend" && ..."
+start "Backend" /min cmd /c "cd /d "C:\My files\AgroMindAI\backend" && ..."
 ```
 
 **After:**
 ```batch
-set PROJECT_ROOT=C:\My files\AroMindAI
+set PROJECT_ROOT=C:\My files\AgroMindAI
 start "Backend" cmd /k "cd /d "%PROJECT_ROOT%\backend" && ..."
 ```
 
@@ -214,7 +214,7 @@ const WS_BASE = 'wss://columbus-unacidulated-alvina.ngrok-free.app/ws'
 ### Immediate (Next 30 seconds)
 ```powershell
 # Run the fixed startup script
-C:\My files\AroMindAI\start_all.bat
+C:\My files\AgroMindAI\start_all.bat
 ```
 
 ### Short-term (Next 5 minutes)

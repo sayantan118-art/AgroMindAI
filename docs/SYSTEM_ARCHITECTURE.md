@@ -1,11 +1,11 @@
-# AgroMind AI - Complete System Architecture
+﻿# AgroMind AI - Complete System Architecture
 
 ## Project Overview
 **AgroMind AI** is an **Agentic Cyber-Physical Farming Intelligence System** that uses IoT sensors, multi-agent AI collaboration, and automated irrigation control to optimize crop health and water usage.
 
 The system features **6 specialized AI agents** that work together autonomously to sense, reason, plan, and act in a closed-loop feedback system.
 
-**Project Path**: `C:\My files\AroMindAI`  
+**Project Path**: `C:\My files\AgroMindAI`  
 **Architecture**: Multi-Agent Autonomous System  
 **Version**: 2.0 (Agentic AI)
 
@@ -105,7 +105,7 @@ AgroMind AI now features a **complete multi-agent autonomous system** with 6 spe
 │  │ 2. Get 24h History → Fetches sensor logs                        │   │
 │  │ 3. Get Pump Usage → Fetches pump activity                       │   │
 │  │ 4. Generate Report → Groq AI summary (cloud)                   │   │
-│  │ 5. Save Report → Writes to C:\My files\AroMindAI\reports\       │   │
+│  │ 5. Save Report → Writes to C:\My files\AgroMindAI\reports\       │   │
 │  └─────────────────────────────────────────────────────────────────┘   │
 │                                                                          │
 │  ┌─────────────────────────────────────────────────────────────────┐   │
@@ -123,7 +123,7 @@ AgroMind AI now features a **complete multi-agent autonomous system** with 6 spe
 │                      BACKEND LAYER (FastAPI)                            │
 ├─────────────────────────────────────────────────────────────────────────┤
 │  FastAPI Backend (Port 8000)                                            │
-│  Location: C:\My files\AroMindAI\backend\main.py                        │
+│  Location: C:\My files\AgroMindAI\backend\main.py                        │
 │                                                                          │
 │  ┌───────────────────────────────────────────────────────────────────┐  │
 │  │          MULTI-AGENT AI SYSTEM (NEW!)                            │  │
@@ -197,7 +197,7 @@ AgroMind AI now features a **complete multi-agent autonomous system** with 6 spe
 │                    PRESENTATION LAYER (React Dashboard)                 │
 ├─────────────────────────────────────────────────────────────────────────┤
 │  React Dashboard (Port 5173)                                            │
-│  Location: C:\My files\AroMindAI\dashboard\                             │
+│  Location: C:\My files\AgroMindAI\dashboard\                             │
 │  Built with: Vite + React + Recharts + Lucide Icons                    │
 │                                                                          │
 │  Features:                                                              │
@@ -420,7 +420,7 @@ All services are deployed to Render and accessed via the shared domain https://a
 ## File Structure
 
 ```
-C:\My files\AroMindAI\
+C:\My files\AgroMindAI\
 ├── backend/
 │   ├── agents/                 # Multi-Agent AI System (NEW!)
 │   │   ├── __init__.py        # Package initialization
@@ -482,12 +482,12 @@ C:\My files\AroMindAI\
 ### Manual Startup
 ```powershell
 # Backend
-cd "C:\My files\AroMindAI\backend"
+cd "C:\My files\AgroMindAI\backend"
 .\venv\Scripts\activate
 uvicorn main:app --host 0.0.0.0 --port 8000
 
 # Dashboard
-cd "C:\My files\AroMindAI\dashboard"
+cd "C:\My files\AgroMindAI\dashboard"
 serve -s dist -l 5173
 
 # n8n
