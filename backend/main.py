@@ -1,16 +1,23 @@
-import os, json, asyncio, datetime
+import os
+import json
+import asyncio
+import datetime
+from typing import Any, Optional
+
 import mqtt_worker
-from typing import Optional
+import aiosqlite
+import httpx
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from irrigation_service import IrrigationService
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, ConfigDict
 from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 from starlette.requests import Request
-import aiosqlite, httpx
-from pydantic import BaseModel
 from dotenv import load_dotenv
+
+from irrigation_service import IrrigationService
+from farm_simulation import VirtualFarmEngine
 
 load_dotenv()
 
@@ -26,7 +33,14 @@ limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(title="AgroMind AI Backend", version="3.0.0")
 app.state.limiter = limiter
 app.state.irrigation_service = IrrigationService()
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.state.virtual_farm_engine = VirtualFarmEngine()
+
+
+def _rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    return _rate_limit_exceeded_handler(request, exc)
+
+
+app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
 
 app.add_middleware(
     CORSMiddleware,
@@ -109,7 +123,6 @@ async def init_db():
 @app.on_event("startup")
 async def startup():
     await init_db()
-    # Launch the MQTT background subscriber (replaces n8n)
     loop = asyncio.get_running_loop()
     mqtt_worker.init(loop, ws_clients, DB_PATH)
     mqtt_worker.start()
@@ -117,6 +130,8 @@ async def startup():
 
 # ── Models ────────────────────────────────────────────────────
 class SensorLog(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     soil_moisture: Optional[float] = 50.0
     temperature: Optional[float] = 25.0
     humidity: Optional[float] = 60.0
@@ -133,23 +148,33 @@ class SensorLog(BaseModel):
     risk_level: Optional[str] = "unknown"
 
 class PumpAction(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     action: str
     duration_sec: int = 0
 
+
 class IrrigationRequest(BaseModel):
-    sensor_data: dict
-    weather_data: Optional[dict] = None
+    model_config = ConfigDict(extra="ignore")
+
+    sensor_data: dict[str, Any]
+    weather_data: Optional[dict[str, Any]] = None
+
 
 class ReportData(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     date: str
     summary: str
-    stats: dict = {}
+    stats: dict[str, Any] = {}
 
 # ── Endpoints ─────────────────────────────────────────────────
 
 @app.post("/sensor/log")
 async def log_sensor(data: SensorLog):
     async with aiosqlite.connect(DB_PATH) as db:
+        rain_detected = int(bool(data.rain_detected))
+        rain_expected = int(bool(data.rain_expected))
         await db.execute(
             """INSERT INTO sensor_logs
                (soil_moisture, temperature, humidity, light,
@@ -158,7 +183,7 @@ async def log_sensor(data: SensorLog):
                 confidence, risk_level)
                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (data.soil_moisture, data.temperature, data.humidity,
-             data.light, int(data.rain_detected), int(data.rain_expected),
+             data.light, rain_detected, rain_expected,
              data.decision, data.reason, data.health_score,
              data.next_check_minutes, data.pump_duration_sec,
              data.confidence, data.risk_level)
@@ -210,9 +235,22 @@ async def irrigation_recommend(data: IrrigationRequest):
         "alerts": result.alerts,
     }
 
+@app.get("/farms")
+async def list_virtual_farms():
+    engine = app.state.virtual_farm_engine
+    return engine.list_farms()
+
+@app.get("/farms/{farm_id}")
+async def get_virtual_farm(farm_id: str):
+    engine = app.state.virtual_farm_engine
+    snapshot = engine.build_snapshot(farm_id)
+    if not snapshot:
+        return {"error": "Farm not found"}
+    return snapshot
+
 @app.get("/weather/forecast")
 async def weather_forecast():
-    params = {
+    params: dict[str, Any] = {
         "latitude": LAT,
         "longitude": LON,
         "hourly": "precipitation_probability,rain",
@@ -226,7 +264,7 @@ async def weather_forecast():
         data = r.json()
         hourly = data.get("hourly", {})
         daily = data.get("daily", {})
-        rain_prob = hourly.get("precipitation_probability", [0])[0]
+        rain_prob = (hourly.get("precipitation_probability") or [0])[0]
         return {
             "rain_probability_next_hour": rain_prob,
             "rain_expected": rain_prob > 50,

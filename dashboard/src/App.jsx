@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useFarms } from './hooks/useFarms'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts'
 import { Droplets, Thermometer, Wind, Sun, CloudRain, Zap } from 'lucide-react'
 import WeatherCard from './components/WeatherCard'
 import FarmManager from './components/FarmManager'
-import { useFarms } from './hooks/useFarms'
 import './App.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
@@ -226,17 +226,60 @@ export default function App() {
   const [history, setHistory] = useState([])
   const [connected, setConnected] = useState(false)
   const [recommendation, setRecommendation] = useState(null)
+  const [farmOptions, setFarmOptions] = useState([])
+  const [selectedFarmId, setSelectedFarmId] = useState('green-valley')
+  const [analytics, setAnalytics] = useState(null)
+  const [loading, setLoading] = useState(true)
   const wsRef = useRef(null)
 
   // Farm management
   const { farms, activeFarm, activeFarmId, selectFarm, createFarm, removeFarm } = useFarms()
 
+  const fetchFarmOptions = useCallback(async () => {
+    try {
+      const r = await fetch(`${API_BASE}/farms`)
+      if (r.ok) {
+        const farmsData = await r.json()
+        setFarmOptions(farmsData)
+        if (!selectedFarmId && farmsData[0]) setSelectedFarmId(farmsData[0].id)
+      }
+    } catch {}
+  }, [selectedFarmId])
+
   const fetchLatest = useCallback(async () => {
     try {
-      const r = await fetch(`${API_BASE}/sensor/latest`)
-      if (r.ok) { const d = await r.json(); if (d && d.soil_moisture != null) setData(d) }
+      const r = await fetch(`${API_BASE}/farms/${selectedFarmId}`)
+      if (r.ok) {
+        const result = await r.json()
+        if (result?.status) {
+          setData({
+            soil_moisture: result.status.soil_moisture,
+            temperature: result.status.temperature,
+            humidity: result.status.humidity,
+            light: result.status.light_level,
+            rain_detected: result.status.rain_probability > 60,
+            decision: result.status.recommendation,
+            reason: result.status.recommendation_reason,
+            health_score: result.status.health_score,
+            next_check_minutes: 5,
+            pump_status: result.status.pump_status,
+            tank_level: result.status.tank_level,
+            ...result.status,
+          })
+          setHistory(result.history || [])
+          setRecommendation({
+            decision: result.status.recommendation,
+            recommended_duration_minutes: result.status.pump_status === 'ON' ? 10 : 0,
+            priority: result.status.recommendation === 'IRRIGATE' ? 'high' : 'medium',
+            reasons: [result.status.recommendation_reason],
+            confidence: 'high',
+            alerts: result.status.alerts || [],
+          })
+          setAnalytics(result.metrics || null)
+        }
+      }
     } catch { /* use mock */ }
-  }, [])
+  }, [selectedFarmId])
 
   const fetchHistory = useCallback(async () => {
     try {
@@ -256,9 +299,9 @@ export default function App() {
           rain_detected: data?.rain_detected ?? MOCK.rain_detected,
         },
         weather_data: {
-          rain_probability_next_hour: 10,
-          wind_speed: 12,
-          tank_level: 80,
+          rain_probability_next_hour: data?.rain_probability ?? 10,
+          wind_speed: data?.wind_speed ?? 12,
+          tank_level: data?.tank_level ?? 80,
         },
       }
       const r = await fetch(`${API_BASE}/irrigation/recommend`, {
@@ -293,12 +336,19 @@ export default function App() {
 
   // Polling
   useEffect(() => {
+    setLoading(true)
+    fetchFarmOptions()
     fetchLatest(); fetchHistory(); fetchRecommendation()
     const a = setInterval(fetchLatest, 5000)
     const b = setInterval(fetchHistory, 15000)
     const c = setInterval(fetchRecommendation, 15000)
     return () => { clearInterval(a); clearInterval(b); clearInterval(c) }
-  }, [fetchLatest, fetchHistory, fetchRecommendation])
+  }, [fetchFarmOptions, fetchLatest, fetchHistory, fetchRecommendation])
+
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 400)
+    return () => clearTimeout(timer)
+  }, [selectedFarmId, data])
 
   const d = data || MOCK
 
@@ -313,6 +363,15 @@ export default function App() {
           <span>AgroMind AI</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+          <select
+            value={selectedFarmId}
+            onChange={(e) => setSelectedFarmId(e.target.value)}
+            style={{ background: '#0f172a', color: '#f8fafc', border: '1px solid #334155', borderRadius: 8, padding: '8px 10px' }}
+          >
+            {farmOptions.map((farm) => (
+              <option key={farm.id} value={farm.id}>{farm.name} · {farm.crop}</option>
+            ))}
+          </select>
           <FarmManager
             farms={farms}
             activeFarm={activeFarm}
@@ -331,6 +390,20 @@ export default function App() {
       </header>
 
       <main className="main-content">
+        {loading ? (
+          <div className="card" style={{ padding: 18, marginBottom: 16, color: '#94a3b8' }}>
+            Loading farm telemetry…
+          </div>
+        ) : null}
+
+        {/* ── Quick Metrics ── */}
+        <div className="sensor-row" style={{ marginBottom: 12 }}>
+          <SensorCard icon={Droplets} label="Avg Soil Moisture" value={analytics ? fmt(analytics.avg_soil_moisture, 0) : fmt(d.soil_moisture, 0)} unit="%" color="#22c55e" />
+          <SensorCard icon={Thermometer} label="Avg Temperature" value={analytics ? fmt(analytics.avg_temperature, 1) : fmt(d.temperature)} unit="°C" color="#f97316" />
+          <SensorCard icon={Wind} label="Avg Humidity" value={analytics ? fmt(analytics.avg_humidity, 0) : fmt(d.humidity, 0)} unit="%" color="#38bdf8" />
+          <SensorCard icon={Zap} label="Latest Recommendation" value={recommendation?.decision || d.decision || '—'} unit="" color="#a78bfa" />
+        </div>
+
         {/* ── Sensor Cards ── */}
         <div className="sensor-row">
           <SensorCard icon={Droplets} label="Soil Moisture" value={fmt(d.soil_moisture, 0)} unit="%" color={soilC} />
