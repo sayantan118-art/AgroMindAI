@@ -2,13 +2,11 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts'
-import { Droplets, Thermometer, Wind, Sun, CloudRain, Zap, Activity } from 'lucide-react'
+import { Droplets, Thermometer, Wind, Sun, CloudRain, Zap } from 'lucide-react'
 import WeatherCard from './components/WeatherCard'
+import FarmManager from './components/FarmManager'
+import { useFarms } from './hooks/useFarms'
 import './App.css'
-
-// Farm GPS coordinates (matches backend .env LATITUDE / LONGITUDE)
-const FARM_LAT = parseFloat(import.meta.env.VITE_FARM_LAT || '22.5726')
-const FARM_LON = parseFloat(import.meta.env.VITE_FARM_LON || '88.3639')
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
 const WS_BASE  = import.meta.env.VITE_WS_BASE  || 'ws://localhost:8000'
@@ -221,6 +219,9 @@ export default function App() {
   const [connected, setConnected] = useState(false)
   const wsRef = useRef(null)
 
+  // Farm management
+  const { farms, activeFarm, activeFarmId, selectFarm, createFarm, removeFarm } = useFarms()
+
   const fetchLatest = useCallback(async () => {
     try {
       const r = await fetch(`${API_BASE}/sensor/latest`)
@@ -271,12 +272,21 @@ export default function App() {
           <span style={{ fontSize: 22 }}>🌱</span>
           <span>AgroMind AI</span>
         </div>
-        <div className="header-status">
-          <span className={`status-dot ${connected ? 'pulse-green' : 'pulse-red'}`}
-            style={{ background: connected ? '#22c55e' : '#ef4444' }} />
-          <span style={{ color: connected ? '#22c55e' : '#ef4444', fontWeight: 600 }}>
-            {connected ? 'System Online' : 'Offline — Mock Data'}
-          </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+          <FarmManager
+            farms={farms}
+            activeFarm={activeFarm}
+            onSelect={selectFarm}
+            onCreate={createFarm}
+            onDelete={removeFarm}
+          />
+          <div className="header-status">
+            <span className={`status-dot ${connected ? 'pulse-green' : 'pulse-red'}`}
+              style={{ background: connected ? '#22c55e' : '#ef4444' }} />
+            <span style={{ color: connected ? '#22c55e' : '#ef4444', fontWeight: 600 }}>
+              {connected ? 'System Online' : 'Offline — Mock Data'}
+            </span>
+          </div>
         </div>
       </header>
 
@@ -314,7 +324,7 @@ export default function App() {
         }))} />
 
         {/* ── Weather ── */}
-        <WeatherCard defaultLat={FARM_LAT} defaultLon={FARM_LON} />
+        <WeatherCard defaultLat={activeFarm.lat} defaultLon={activeFarm.lon} key={activeFarmId} />
       </main>
 
       {/* ── Floating Pump ── */}

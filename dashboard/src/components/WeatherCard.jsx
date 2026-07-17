@@ -9,7 +9,6 @@
  *   - Manual location input
  */
 
-import { useState } from 'react'
 import { useWeather } from '../hooks/useWeather'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -82,42 +81,6 @@ function DailyForecast({ daily }) {
   )
 }
 
-function LocationForm({ lat, lon, onSubmit }) {
-  const [dLat, setDLat] = useState(lat.toFixed(4))
-  const [dLon, setDLon] = useState(lon.toFixed(4))
-
-  function handleSubmit(e) {
-    e.preventDefault()
-    const la = parseFloat(dLat)
-    const lo = parseFloat(dLon)
-    if (!isNaN(la) && !isNaN(lo)) onSubmit(la, lo)
-  }
-
-  return (
-    <form onSubmit={handleSubmit} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-      <input
-        type="number" step="0.0001" value={dLat}
-        onChange={e => setDLat(e.target.value)}
-        placeholder="Latitude"
-        style={inputStyle}
-        aria-label="Latitude"
-      />
-      <input
-        type="number" step="0.0001" value={dLon}
-        onChange={e => setDLon(e.target.value)}
-        placeholder="Longitude"
-        style={inputStyle}
-        aria-label="Longitude"
-      />
-      <button type="submit" style={btnStyle}>Update</button>
-    </form>
-  )
-}
-
-const inputStyle = {
-  background: '#0f172a', border: '1px solid #334155', borderRadius: 8,
-  color: '#f1f5f9', padding: '6px 10px', fontSize: 13, width: 110, outline: 'none',
-}
 const btnStyle = {
   background: '#1d4ed8', border: 'none', borderRadius: 8, color: '#fff',
   padding: '6px 14px', fontSize: 13, cursor: 'pointer', fontWeight: 600,
@@ -125,8 +88,7 @@ const btnStyle = {
 
 // ── Main WeatherCard ──────────────────────────────────────────────────────────
 export default function WeatherCard({ defaultLat, defaultLon }) {
-  const { weather, loading, error, lat, lon, setLocation, refresh } = useWeather(defaultLat, defaultLon)
-  const [showLocation, setShowLocation] = useState(false)
+  const { weather, loading, error, lat, refresh } = useWeather(defaultLat, defaultLon)
 
   // ── Loading ──
   if (loading && !weather) {
