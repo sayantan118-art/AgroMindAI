@@ -90,7 +90,7 @@ function HealthGauge({ score }) {
 }
 
 // ─── AIDecisionPanel ──────────────────────────────────────────────────────────
-function AIDecisionPanel({ decision, reason, nextCheckMinutes }) {
+function AIDecisionPanel({ decision, reason, nextCheckMinutes, duration, priority, confidence, alerts }) {
   const [seconds, setSeconds] = useState(nextCheckMinutes * 60)
   useEffect(() => {
     setSeconds(nextCheckMinutes * 60)
@@ -111,10 +111,18 @@ function AIDecisionPanel({ decision, reason, nextCheckMinutes }) {
           background: color + '22', color, border: `1px solid ${color}55`,
           borderRadius: 8, padding: '6px 18px', fontWeight: 700, fontSize: 18, letterSpacing: 1
         }}>{decision || '—'}</span>
+        <span style={{ color: '#94a3b8', fontSize: 12, textTransform: 'uppercase' }}>{priority || 'medium'}</span>
       </div>
-      <div style={{ color: '#cbd5e1', fontSize: 14, lineHeight: 1.6, marginBottom: 20, minHeight: 40 }}>
+      <div style={{ color: '#cbd5e1', fontSize: 14, lineHeight: 1.6, marginBottom: 12, minHeight: 40 }}>
         {reason || 'Awaiting sensor data...'}
       </div>
+      <div style={{ color: '#f59e0b', fontSize: 13, marginBottom: 10 }}>Duration: {duration ?? 0} min</div>
+      <div style={{ color: '#38bdf8', fontSize: 13, marginBottom: 10 }}>Confidence: {confidence || 'medium'}</div>
+      {alerts?.length > 0 && (
+        <div style={{ color: '#f97316', fontSize: 13, marginBottom: 12 }}>
+          Alerts: {alerts.join(', ')}
+        </div>
+      )}
       <div style={{ borderTop: '1px solid #334155', paddingTop: 16 }}>
         <div style={{ color: '#64748b', fontSize: 12, marginBottom: 4 }}>Next check in</div>
         <div style={{ color: '#22c55e', fontFamily: 'monospace', fontSize: 28, fontWeight: 700 }}>
@@ -217,6 +225,7 @@ export default function App() {
   const [data, setData] = useState(null)
   const [history, setHistory] = useState([])
   const [connected, setConnected] = useState(false)
+  const [recommendation, setRecommendation] = useState(null)
   const wsRef = useRef(null)
 
   // Farm management
@@ -236,6 +245,36 @@ export default function App() {
     } catch { /* use mock */ }
   }, [])
 
+  const fetchRecommendation = useCallback(async () => {
+    try {
+      const payload = {
+        sensor_data: {
+          soil_moisture: data?.soil_moisture ?? MOCK.soil_moisture,
+          temperature: data?.temperature ?? MOCK.temperature,
+          humidity: data?.humidity ?? MOCK.humidity,
+          light: data?.light ?? MOCK.light,
+          rain_detected: data?.rain_detected ?? MOCK.rain_detected,
+        },
+        weather_data: {
+          rain_probability_next_hour: 10,
+          wind_speed: 12,
+          tank_level: 80,
+        },
+      }
+      const r = await fetch(`${API_BASE}/irrigation/recommend`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (r.ok) {
+        const result = await r.json()
+        setRecommendation(result)
+      }
+    } catch {
+      setRecommendation(null)
+    }
+  }, [data])
+
   // WebSocket
   useEffect(() => {
     function connect() {
@@ -254,11 +293,12 @@ export default function App() {
 
   // Polling
   useEffect(() => {
-    fetchLatest(); fetchHistory()
+    fetchLatest(); fetchHistory(); fetchRecommendation()
     const a = setInterval(fetchLatest, 5000)
     const b = setInterval(fetchHistory, 15000)
-    return () => { clearInterval(a); clearInterval(b) }
-  }, [fetchLatest, fetchHistory])
+    const c = setInterval(fetchRecommendation, 15000)
+    return () => { clearInterval(a); clearInterval(b); clearInterval(c) }
+  }, [fetchLatest, fetchHistory, fetchRecommendation])
 
   const d = data || MOCK
 
@@ -310,9 +350,13 @@ export default function App() {
         <div className="middle-row">
           <HealthGauge score={d.health_score} />
           <AIDecisionPanel
-            decision={d.decision}
-            reason={d.reason}
+            decision={recommendation?.decision || d.decision}
+            reason={recommendation?.reasons?.join(' ') || d.reason}
             nextCheckMinutes={d.next_check_minutes ?? 15}
+            duration={recommendation?.recommended_duration_minutes ?? 0}
+            priority={recommendation?.priority || 'medium'}
+            confidence={recommendation?.confidence || 'medium'}
+            alerts={recommendation?.alerts || []}
           />
         </div>
 

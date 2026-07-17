@@ -2,6 +2,7 @@ import os, json, asyncio, datetime
 import mqtt_worker
 from typing import Optional
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from irrigation_service import IrrigationService
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -24,6 +25,7 @@ ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
 limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(title="AgroMind AI Backend", version="3.0.0")
 app.state.limiter = limiter
+app.state.irrigation_service = IrrigationService()
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
@@ -134,6 +136,10 @@ class PumpAction(BaseModel):
     action: str
     duration_sec: int = 0
 
+class IrrigationRequest(BaseModel):
+    sensor_data: dict
+    weather_data: Optional[dict] = None
+
 class ReportData(BaseModel):
     date: str
     summary: str
@@ -189,6 +195,20 @@ async def sensor_history(limit: int = 100):
         )
         rows = await cur.fetchall()
     return [dict(r) for r in rows]
+
+@app.post("/irrigation/recommend")
+async def irrigation_recommend(data: IrrigationRequest):
+    service = app.state.irrigation_service
+    result = service.build_recommendation(data.sensor_data, data.weather_data)
+    return {
+        "decision": result.decision,
+        "recommended_duration_minutes": result.recommended_duration_minutes,
+        "priority": result.priority,
+        "reasons": result.reasons,
+        "confidence": result.confidence,
+        "validation_status": result.validation_status,
+        "alerts": result.alerts,
+    }
 
 @app.get("/weather/forecast")
 async def weather_forecast():
