@@ -94,10 +94,13 @@ export default function WeatherCard({ defaultLat, defaultLon }) {
   const [draftLat, setDraftLat] = React.useState(lat ?? defaultLat)
   const [draftLon, setDraftLon] = React.useState(lon ?? defaultLon)
 
+  const resolvedLat = Number.isFinite(Number(lat)) ? Number(lat) : Number(defaultLat)
+  const resolvedLon = Number.isFinite(Number(lon)) ? Number(lon) : Number(defaultLon)
+
   React.useEffect(() => {
-    setDraftLat(lat ?? defaultLat)
-    setDraftLon(lon ?? defaultLon)
-  }, [lat, lon, defaultLat, defaultLon])
+    setDraftLat(resolvedLat)
+    setDraftLon(resolvedLon)
+  }, [resolvedLat, resolvedLon])
 
   function handleLocationSubmit(e) {
     e.preventDefault()
@@ -187,7 +190,7 @@ export default function WeatherCard({ defaultLat, defaultLon }) {
       {showLocation && (
         <form onSubmit={handleLocationSubmit} style={{ marginBottom: 16, padding: 12, background: '#0f172a', borderRadius: 10 }}>
           <div style={{ color: '#94a3b8', fontSize: 12, marginBottom: 8 }}>
-            Current: {Number(lat ?? defaultLat).toFixed(4)}, {Number(lon ?? defaultLon).toFixed(4)}
+            Current: {resolvedLat.toFixed(4)}, {resolvedLon.toFixed(4)}
           </div>
           <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
             <input
