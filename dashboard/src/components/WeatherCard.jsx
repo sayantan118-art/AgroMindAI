@@ -9,6 +9,7 @@
  *   - Manual location input
  */
 
+import React from 'react'
 import { useWeather } from '../hooks/useWeather'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -88,7 +89,25 @@ const btnStyle = {
 
 // ── Main WeatherCard ──────────────────────────────────────────────────────────
 export default function WeatherCard({ defaultLat, defaultLon }) {
-  const { weather, loading, error, lat, refresh } = useWeather(defaultLat, defaultLon)
+  const { weather, loading, error, lat, lon, refresh, setLocation } = useWeather(defaultLat, defaultLon)
+  const [showLocation, setShowLocation] = React.useState(false)
+  const [draftLat, setDraftLat] = React.useState(lat ?? defaultLat)
+  const [draftLon, setDraftLon] = React.useState(lon ?? defaultLon)
+
+  React.useEffect(() => {
+    setDraftLat(lat ?? defaultLat)
+    setDraftLon(lon ?? defaultLon)
+  }, [lat, lon, defaultLat, defaultLon])
+
+  function handleLocationSubmit(e) {
+    e.preventDefault()
+    const nextLat = Number(draftLat)
+    const nextLon = Number(draftLon)
+    if (Number.isFinite(nextLat) && Number.isFinite(nextLon)) {
+      setLocation(nextLat, nextLon)
+      setShowLocation(false)
+    }
+  }
 
   // ── Loading ──
   if (loading && !weather) {
@@ -110,8 +129,13 @@ export default function WeatherCard({ defaultLat, defaultLon }) {
   }
 
   if (!weather) return null
-  const { current, hourly24, daily7, alerts, fetchedAt } = weather
-  const uv = uvLabel(current.uvIndex)
+  const safeWeather = weather || {}
+  const current = safeWeather.current || {}
+  const hourly24 = Array.isArray(safeWeather.hourly24) ? safeWeather.hourly24 : []
+  const daily7 = Array.isArray(safeWeather.daily7) ? safeWeather.daily7 : []
+  const alerts = Array.isArray(safeWeather.alerts) ? safeWeather.alerts : []
+  const fetchedAt = safeWeather.fetchedAt
+  const uv = uvLabel(Number(current.uvIndex) || 0)
 
   return (
     <div className="card">
@@ -161,12 +185,29 @@ export default function WeatherCard({ defaultLat, defaultLon }) {
 
       {/* ── Location form (collapsible) ── */}
       {showLocation && (
-        <div style={{ marginBottom: 16, padding: 12, background: '#0f172a', borderRadius: 10 }}>
+        <form onSubmit={handleLocationSubmit} style={{ marginBottom: 16, padding: 12, background: '#0f172a', borderRadius: 10 }}>
           <div style={{ color: '#94a3b8', fontSize: 12, marginBottom: 8 }}>
-            Current: {lat.toFixed(4)}, {lon.toFixed(4)}
+            Current: {Number(lat ?? defaultLat).toFixed(4)}, {Number(lon ?? defaultLon).toFixed(4)}
           </div>
-          <LocationForm lat={lat} lon={lon} onSubmit={(la, lo) => { setLocation(la, lo); setShowLocation(false) }} />
-        </div>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+            <input
+              value={draftLat}
+              onChange={(e) => setDraftLat(e.target.value)}
+              style={{ flex: 1, background: '#111827', color: '#f8fafc', border: '1px solid #334155', borderRadius: 8, padding: '8px 10px' }}
+              placeholder="Latitude"
+            />
+            <input
+              value={draftLon}
+              onChange={(e) => setDraftLon(e.target.value)}
+              style={{ flex: 1, background: '#111827', color: '#f8fafc', border: '1px solid #334155', borderRadius: 8, padding: '8px 10px' }}
+              placeholder="Longitude"
+            />
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button type="submit" style={btnStyle}>Apply</button>
+            <button type="button" onClick={() => setShowLocation(false)} style={{ ...btnStyle, background: '#334155' }}>Cancel</button>
+          </div>
+        </form>
       )}
 
       {/* ── Stats grid ── */}
