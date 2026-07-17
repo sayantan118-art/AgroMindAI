@@ -193,3 +193,70 @@ body {
   .header { padding: 12px 16px; }
   .main-content { padding: 14px; }
 }
+
+/* ── Weather Card ─────────────────────────────────────────────────────────── */
+.weather-hourly-strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: #334155 transparent;
+}
+.weather-hourly-strip::-webkit-scrollbar { height: 4px; }
+.weather-hourly-strip::-webkit-scrollbar-track { background: transparent; }
+.weather-hourly-strip::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
+
+.weather-hourly-item {
+  background: #0f172a;
+  border-radius: 10px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 56px;
+  flex-shrink: 0;
+}
+
+.weather-stat-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.weather-stat-box {
+  background: #0f172a;
+  border-radius: 10px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 90px;
+}
+
+.weather-alert {
+  border-radius: 8px;
+  padding: 10px 14px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.weather-daily-row {
+  display: grid;
+  grid-template-columns: 100px 32px 1fr 48px;
+  align-items: center;
+  gap: 8px;
+  border-radius: 8px;
+  padding: 6px 8px;
+  transition: background 0.15s;
+}
+.weather-daily-row:hover { background: #1e293b; }
+.weather-daily-row.today { background: #0f172a; }
+
+@media (max-width: 640px) {
+  .weather-stat-grid { gap: 6px; }
+  .weather-stat-box  { min-width: 75px; padding: 8px 10px; }
+  .weather-daily-row { grid-template-columns: 80px 28px 1fr 40px; }
+}

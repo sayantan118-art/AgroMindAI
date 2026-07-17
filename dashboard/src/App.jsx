@@ -3,7 +3,12 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts'
 import { Droplets, Thermometer, Wind, Sun, CloudRain, Zap, Activity } from 'lucide-react'
+import WeatherCard from './components/WeatherCard'
 import './App.css'
+
+// Farm GPS coordinates (matches backend .env LATITUDE / LONGITUDE)
+const FARM_LAT = parseFloat(import.meta.env.VITE_FARM_LAT || '22.5726')
+const FARM_LON = parseFloat(import.meta.env.VITE_FARM_LON || '88.3639')
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
 const WS_BASE  = import.meta.env.VITE_WS_BASE  || 'ws://localhost:8000'
@@ -307,6 +312,9 @@ export default function App() {
           temperature: MOCK.temperature + (Math.random() * 4 - 2),
           ts: `2026-03-05T${String(10 + i).padStart(2, '0')}:00`
         }))} />
+
+        {/* ── Weather ── */}
+        <WeatherCard defaultLat={FARM_LAT} defaultLon={FARM_LON} />
       </main>
 
       {/* ── Floating Pump ── */}
