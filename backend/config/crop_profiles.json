@@ -1,0 +1,135 @@
+{
+  "_comment": "Crop thresholds for the deterministic assessment engine. These are GENERAL STARTING VALUES to be validated by the user for their soil, cultivar and climate — they are NOT research-backed. See docs/DATABASE_AND_PERSISTENCE.md for the soil-sensor calibration assumption and how to edit the active profile in the database after first run (the DB is authoritative after seeding).",
+  "analysis_version": "1.0.0",
+  "config_version": "1.0.0",
+  "default": {
+    "name": "default",
+    "crop_type": "General",
+    "growth_stage": "Vegetative",
+    "thresholds": {
+      "soil_moisture_percent": {
+        "stress_low": 30.0,
+        "optimal_min": 40.0,
+        "optimal_max": 70.0,
+        "waterlogging_high": 85.0
+      },
+      "temperature_celsius": {
+        "cold_stress_below": 15.0,
+        "heat_stress_above": 34.0,
+        "extreme_heat_above": 38.0,
+        "valid_min": -10.0,
+        "valid_max": 60.0
+      },
+      "humidity_percent": {
+        "low_below": 30.0,
+        "high_above": 90.0,
+        "valid_min": 0.0,
+        "valid_max": 100.0
+      },
+      "rain": {
+        "valid": true,
+        "rain_implies_skip_probability_threshold": 60.0
+      },
+      "light_raw_adc": {
+        "_note": "Light is a unitless raw ADC/LDR reading from the firmware, not lux. Used only as a relative brightness hint; no thresholds are asserted as authoritative.",
+        "dark_below": 500,
+        "bright_above": 2000
+      }
+    },
+    "staleness_limit_seconds": 900,
+    "history": {
+      "window_points": 20,
+      "min_points_for_trend": 4,
+      "max_age_seconds": 3600
+    },
+    "scoring_weights": {
+      "soil_moisture": 0.45,
+      "temperature": 0.30,
+      "humidity": 0.15,
+      "rain": 0.10
+    },
+    "pump_limits": {
+      "max_duration_seconds": 180,
+      "max_daily_events": 10,
+      "min_interval_seconds": 600
+    }
+  },
+  "profiles": {
+    "Tomato": {
+      "crop_type": "Tomato",
+      "growth_stage": "Vegetative",
+      "thresholds": {
+        "soil_moisture_percent": {
+          "stress_low": 30.0,
+          "optimal_min": 45.0,
+          "optimal_max": 70.0,
+          "waterlogging_high": 85.0
+        },
+        "temperature_celsius": {
+          "cold_stress_below": 15.0,
+          "heat_stress_above": 34.0,
+          "extreme_heat_above": 38.0,
+          "valid_min": -10.0,
+          "valid_max": 60.0
+        },
+        "humidity_percent": {
+          "low_below": 30.0,
+          "high_above": 90.0,
+          "valid_min": 0.0,
+          "valid_max": 100.0
+        },
+        "rain": { "valid": true, "rain_implies_skip_probability_threshold": 60.0 },
+        "light_raw_adc": { "dark_below": 500, "bright_above": 2000 }
+      },
+      "staleness_limit_seconds": 900,
+      "history": { "window_points": 20, "min_points_for_trend": 4, "max_age_seconds": 3600 },
+      "scoring_weights": { "soil_moisture": 0.45, "temperature": 0.30, "humidity": 0.15, "rain": 0.10 },
+      "pump_limits": { "max_duration_seconds": 180, "max_daily_events": 10, "min_interval_seconds": 600 }
+    },
+    "Wheat": {
+      "crop_type": "Wheat",
+      "growth_stage": "Ripening",
+      "thresholds": {
+        "soil_moisture_percent": { "stress_low": 28.0, "optimal_min": 40.0, "optimal_max": 65.0, "waterlogging_high": 80.0 },
+        "temperature_celsius": { "cold_stress_below": 10.0, "heat_stress_above": 34.0, "extreme_heat_above": 38.0, "valid_min": -10.0, "valid_max": 60.0 },
+        "humidity_percent": { "low_below": 30.0, "high_above": 90.0, "valid_min": 0.0, "valid_max": 100.0 },
+        "rain": { "valid": true, "rain_implies_skip_probability_threshold": 60.0 },
+        "light_raw_adc": { "dark_below": 500, "bright_above": 2000 }
+      },
+      "staleness_limit_seconds": 900,
+      "history": { "window_points": 20, "min_points_for_trend": 4, "max_age_seconds": 3600 },
+      "scoring_weights": { "soil_moisture": 0.45, "temperature": 0.30, "humidity": 0.15, "rain": 0.10 },
+      "pump_limits": { "max_duration_seconds": 180, "max_daily_events": 10, "min_interval_seconds": 600 }
+    },
+    "Mango": {
+      "crop_type": "Mango",
+      "growth_stage": "Flowering",
+      "thresholds": {
+        "soil_moisture_percent": { "stress_low": 35.0, "optimal_min": 45.0, "optimal_max": 75.0, "waterlogging_high": 88.0 },
+        "temperature_celsius": { "cold_stress_below": 12.0, "heat_stress_above": 36.0, "extreme_heat_above": 40.0, "valid_min": -10.0, "valid_max": 60.0 },
+        "humidity_percent": { "low_below": 30.0, "high_above": 90.0, "valid_min": 0.0, "valid_max": 100.0 },
+        "rain": { "valid": true, "rain_implies_skip_probability_threshold": 60.0 },
+        "light_raw_adc": { "dark_below": 500, "bright_above": 2000 }
+      },
+      "staleness_limit_seconds": 900,
+      "history": { "window_points": 20, "min_points_for_trend": 4, "max_age_seconds": 3600 },
+      "scoring_weights": { "soil_moisture": 0.45, "temperature": 0.30, "humidity": 0.15, "rain": 0.10 },
+      "pump_limits": { "max_duration_seconds": 180, "max_daily_events": 10, "min_interval_seconds": 600 }
+    },
+    "Apple": {
+      "crop_type": "Apple",
+      "growth_stage": "Fruit Set",
+      "thresholds": {
+        "soil_moisture_percent": { "stress_low": 32.0, "optimal_min": 42.0, "optimal_max": 68.0, "waterlogging_high": 85.0 },
+        "temperature_celsius": { "cold_stress_below": 5.0, "heat_stress_above": 32.0, "extreme_heat_above": 36.0, "valid_min": -10.0, "valid_max": 60.0 },
+        "humidity_percent": { "low_below": 30.0, "high_above": 90.0, "valid_min": 0.0, "valid_max": 100.0 },
+        "rain": { "valid": true, "rain_implies_skip_probability_threshold": 60.0 },
+        "light_raw_adc": { "dark_below": 500, "bright_above": 2000 }
+      },
+      "staleness_limit_seconds": 900,
+      "history": { "window_points": 20, "min_points_for_trend": 4, "max_age_seconds": 3600 },
+      "scoring_weights": { "soil_moisture": 0.45, "temperature": 0.30, "humidity": 0.15, "rain": 0.10 },
+      "pump_limits": { "max_duration_seconds": 180, "max_daily_events": 10, "min_interval_seconds": 600 }
+    }
+  }
+}

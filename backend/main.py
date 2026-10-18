@@ -7,7 +7,7 @@ from typing import Any, Optional
 
 import httpx
 import mqtt_worker
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -31,6 +31,11 @@ from database.repositories import (
     WeatherRepository,
 )
 from database.seed import seed_if_needed
+from database import connection as db_connection
+from database.migrations_runner import run_pending_migrations
+from analysis.service import AnalyzeService, AnalysisTooFrequent
+from analysis.quota_manager import QuotaManager
+from analysis.safety_gate import SafetyGate
 
 load_dotenv()
 
@@ -150,18 +155,72 @@ async def _persist_sensor_reading(data: "SensorLog") -> dict[str, Any]:
         }
 
 
+def _log_db_location(db_path: str) -> None:
+    """Log the resolved DB location (no secrets) and warn if it looks ephemeral."""
+    try:
+        logger.info("Resolved DB location: %s", db_path)
+        url = db_connection.get_database_url()
+        if url.startswith("sqlite"):
+            # A relative DB_PATH or one inside the code dir is ephemeral on hosts
+            # like Render's free tier; durable storage needs a persistent disk or
+            # DATABASE_URL pointing at managed Postgres (see docs).
+            code_dir = os.path.abspath(os.path.dirname(__file__))
+            if os.path.abspath(db_path).startswith(code_dir) and not os.getenv("DATABASE_URL"):
+                logger.warning(
+                    "DB_PATH %s resolves inside the deployed code directory. On hosts with an "
+                    "ephemeral filesystem (e.g. Render free tier) this DB — including quota cooldown "
+                    "state and analysis reports — is LOST on redeploy/restart. Attach a persistent "
+                    "disk and point DB_PATH at it, or set DATABASE_URL to managed Postgres.",
+                    db_path,
+                )
+    except Exception as exc:  # pragma: no cover
+        logger.debug("DB location logging failed: %s", exc)
+
+
 @app.on_event("startup")
 async def startup():
     try:
         await init_db()
         await seed_if_needed()
+        # Forward-only, idempotent migrations (ALTER existing tables + create new
+        # ones + backfill crop-profile versions). A backup is taken before any
+        # pending migration touches an existing populated DB.
+        engine = db_connection.engine
+        db_path = os.path.abspath(DB_PATH)
+        applied = await run_pending_migrations(engine, db_path if str(engine.url).startswith("sqlite") else None)
+        if applied:
+            logger.info("Applied migrations: %s", applied)
+        _log_db_location(db_path)
     except Exception as exc:
         logger.warning("Database initialization failed: %s", exc)
+
+    # Resolve Groq model + lease/backoff from env (kept on the backend only).
+    groq_model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+    lease_seconds = int(os.getenv("QUOTA_LEASE_SECONDS", "60"))
+    backoff_seconds = int(os.getenv("QUOTA_BACKOFF_SECONDS", "300"))
+
+    # Single quota gate over the same DB (SQLite or Postgres via DATABASE_URL).
+    # The atomic claim is a conditional UPDATE inside a transaction, safe across
+    # processes (SQLite busy_timeout / Postgres row locks), not just one process.
+    quota_manager = QuotaManager.for_session_factory(
+        SessionFactory, model=groq_model,
+        lease_seconds=lease_seconds, conservative_backoff_seconds=backoff_seconds,
+    )
+
+    app.state.quota_manager = quota_manager
+    app.state.analyze_service = AnalyzeService(
+        SessionFactory, quota_manager, groq_model=groq_model,
+        cache_ttl_seconds=int(os.getenv("ANALYSIS_CACHE_TTL_SECONDS", "1800")),
+        min_interval_seconds=int(os.getenv("MIN_ANALYZE_INTERVAL_SECONDS", "15")),
+    )
+    app.state.safety_gate = SafetyGate(
+        SessionFactory, publish_fn=mqtt_worker.publish_pump,
+    )
 
     loop = asyncio.get_running_loop()
     mqtt_worker.init(loop, ws_clients, DB_PATH)
     mqtt_worker.start()
-    print("AgroMind Backend v3.0 started. DB initialized. MQTT worker launched.")
+    print("AgroMind Backend v3.1 started. DB initialized + migrations applied. MQTT worker launched.")
 
 # ── Models ────────────────────────────────────────────────────
 class SensorLog(BaseModel):
@@ -548,6 +607,111 @@ async def health():
     return {
         "status": "ok",
         "service": "AgroMind AI Backend",
-        "version": "3.0.0",
+        "version": "3.1.0",
         "time": datetime.datetime.now().isoformat()
+    }
+
+
+# ── On-demand analysis endpoints (Groq behind the quota gate + rule engine) ──
+class AnalyzeRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    force: bool = False
+
+
+async def _primary_farm_id() -> str:
+    async with SessionFactory() as session:
+        return await _get_primary_farm_id(session)
+
+
+@app.post("/analysis/analyze")
+async def analyze_crop_health(request: AnalyzeRequest, fastapi_request: Request):
+    """User-triggered crop-health analysis. Exactly one Groq call may happen,
+    only after the persistent quota gate allows it; otherwise a deterministic
+    rule-engine report is returned. Never auto-invoked by sensor data.
+    """
+    service: AnalyzeService = app.state.analyze_service
+    farm_id = await _primary_farm_id()
+    client_id = get_remote_address(fastapi_request)
+    groq_key = os.getenv("GROQ_API_KEY", "") or None
+    try:
+        response = await service.analyze(
+            farm_id=farm_id, client_id=client_id, force=request.force,
+            groq_api_key=groq_key,
+        )
+    except AnalysisTooFrequent as exc:
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=429,
+            content={"error": "too_frequent", "retry_after_seconds": exc.retry_after_seconds},
+            headers={"Retry-After": str(exc.retry_after_seconds)},
+        )
+    return response.model_dump()
+
+
+@app.get("/analysis/reports")
+async def list_analysis_reports(limit: int = Query(20, ge=1, le=100), offset: int = Query(0, ge=0)):
+    """Paginated, newest-first history of analysis reports (read-only)."""
+    from database.repositories.analysis_repository import list_reports
+    farm_id = await _primary_farm_id()
+    return {"reports": await list_reports(SessionFactory, farm_id=farm_id, limit=limit, offset=offset)}
+
+
+@app.get("/analysis/reports/{report_id}")
+async def get_analysis_report(report_id: str):
+    from database.repositories.analysis_repository import get_report
+    row = await get_report(SessionFactory, report_id)
+    if row is None:
+        return {"error": "Report not found"}
+    return row
+
+
+@app.get("/analysis/quota/status")
+async def analysis_quota_status():
+    """Human-readable quota/cooldown state (no secrets, no key)."""
+    manager: QuotaManager = app.state.quota_manager
+    view = await manager.get_view(os.getenv("GROQ_API_KEY", "") or None)
+    return view.to_dict()
+
+
+# ── Manual pump control (actuation only through the safety gate) ─────────────
+class PumpControlRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    action: str
+    duration_sec: int = 0
+
+
+@app.post("/pump/control")
+async def pump_control(request: PumpControlRequest, fastapi_request: Request):
+    """Manual, user-triggered pump command. Passes through the standalone
+    safety gate (180s cap, 10/day, sensor validity, min interval) and writes an
+    audit record before publishing. Analysis reports never reach this path.
+    """
+    gate: SafetyGate = app.state.safety_gate
+    farm_id = await _primary_farm_id()
+    sensor_snapshot = None
+    crop_name = None
+    async with SessionFactory() as session:
+        farm = await FarmRepository(session).get_by_id(farm_id)
+        crop_name = farm.crop if farm else None
+        latest = await SensorReadingRepository(session).get_latest_by_farm(farm_id)
+        if latest:
+            sensor_snapshot = {
+                "soil_moisture": latest.soil_moisture,
+                "temperature": latest.temperature,
+                "humidity": latest.humidity,
+                "rain": bool(latest.rain) if latest.rain is not None else None,
+            }
+    decision, published, audit_id = await gate.actuate(
+        action=request.action, duration_sec=request.duration_sec, farm_id=farm_id,
+        crop_name=crop_name, sensor_snapshot=sensor_snapshot,
+        source="manual_ui", actor=get_remote_address(fastapi_request),
+    )
+    return {
+        "allowed": decision.allowed,
+        "action": decision.action,
+        "duration_sec": decision.duration_sec,
+        "clamped": decision.clamped,
+        "reason": decision.reason,
+        "published": published,
+        "audit_id": audit_id,
     }

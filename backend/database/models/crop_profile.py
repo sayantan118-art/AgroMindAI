@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, String, Text
+from sqlalchemy import Boolean, DateTime, Float, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from database.connection import Base
@@ -21,5 +21,10 @@ class CropProfile(Base):
     water_demand: Mapped[float | None] = mapped_column(Float, nullable=True)
     stress_threshold: Mapped[float | None] = mapped_column(Float, nullable=True)
     yield_target: Mapped[float | None] = mapped_column(Float, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Versioning/active/thresholds added by the on-demand analysis rework.
+    version: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    thresholds_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)

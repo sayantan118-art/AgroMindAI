@@ -24,6 +24,12 @@ class SensorReading(Base):
     wind_speed: Mapped[float | None] = mapped_column(Float, nullable=True)
     uv_index: Mapped[float | None] = mapped_column(Float, nullable=True)
     air_pressure: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Quality / dedup fields added by the on-demand analysis rework. Existing
+    # rows have NULL here (added via non-destructive migration).
+    quality_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    quality_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    dedup_key: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    received_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     timestamp: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 

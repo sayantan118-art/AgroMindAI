@@ -46,7 +46,39 @@ def get_session_factory():
     if SessionFactory is None or engine is None:
         engine = create_async_engine(get_database_url(), echo=False, future=True)
         SessionFactory = async_sessionmaker(engine, expire_on_commit=False)
+        _configure_sqlite_engine(engine)
     return SessionFactory
+
+
+def _configure_sqlite_engine(engine: AsyncEngine) -> None:
+    """Per-connection PRAGMAs (foreign_keys, busy_timeout) + WAL for SQLite.
+
+    WAL is persistent in the DB file; foreign_keys and busy_timeout must be set
+    per connection. On storage that cannot use WAL (some network filesystems)
+    SQLite falls back automatically and we log it (see set_wal_mode).
+    """
+    url = str(engine.url)
+    if not url.startswith("sqlite"):
+        return
+    try:
+        from database.migrations_runner import register_sqlite_pragmas, set_wal_mode
+        register_sqlite_pragmas(engine.sync_engine)
+        db_path = _sqlite_path_from_url(url)
+        if db_path:
+            set_wal_mode(db_path)
+    except Exception as exc:  # pragma: no cover - best effort
+        import logging
+        logging.getLogger("agromind.db").warning("SQLite PRAGMA/WAL setup failed: %s", exc)
+
+
+def _sqlite_path_from_url(url: str) -> str | None:
+    # sqlite+aiosqlite:////<abs path>
+    marker = "sqlite+aiosqlite:///"
+    if marker in url:
+        return url.split(marker, 1)[1]
+    if url.startswith("sqlite:///"):
+        return url.split("sqlite:///", 1)[1]
+    return None
 
 
 SessionFactory = _SessionFactoryProxy()

@@ -11,6 +11,10 @@ from database.models.notification import Notification
 from database.models.activity_timeline import ActivityTimeline
 from database.models.report import Report
 from database.models.simulation_state import SimulationState
+from database.models.analysis_report import AnalysisReport
+from database.models.analysis_cache import AnalysisCacheIndex
+from database.models.api_quota_state import ApiQuotaState
+from database.models.irrigation_audit import IrrigationAudit
 
 __all__ = [
     "Farm",
@@ -26,4 +30,8 @@ __all__ = [
     "ActivityTimeline",
     "Report",
     "SimulationState",
+    "AnalysisReport",
+    "AnalysisCacheIndex",
+    "ApiQuotaState",
+    "IrrigationAudit",
 ]
