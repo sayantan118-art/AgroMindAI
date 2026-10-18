@@ -6,6 +6,7 @@ import {
 import { Droplets, Thermometer, Wind, Sun, CloudRain, Zap } from 'lucide-react'
 import WeatherCard from './components/WeatherCard'
 import FarmManager from './components/FarmManager'
+import { SpeedInsights } from '@vercel/speed-insights/react'
 import './App.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
@@ -461,6 +462,9 @@ export default function App() {
 
       {/* ── Floating Pump ── */}
       <PumpControl />
+      
+      {/* ── Vercel Speed Insights ── */}
+      <SpeedInsights />
     </div>
   )
 }
