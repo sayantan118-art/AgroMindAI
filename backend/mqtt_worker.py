@@ -95,24 +95,61 @@ def _ask_groq(sensor: dict, weather: dict) -> dict:
 
 # ── Database write ────────────────────────────────────────────────────────────
 async def _save_reading(sensor: dict, weather: dict, ai: dict):
-    import aiosqlite
-    async with aiosqlite.connect(_db_path) as db:
-        await db.execute(
-            """INSERT INTO sensor_logs
-               (soil_moisture, temperature, humidity, light,
-                rain_detected, rain_expected, decision, reason,
-                health_score, next_check_minutes, pump_duration_sec,
-                confidence, risk_level)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (sensor.get("soil"), sensor.get("temp"), sensor.get("hum"),
-             sensor.get("light"), int(sensor.get("rain", False)),
-             int(weather.get("rain_expected", False)),
-             ai.get("decision", "SKIP"), ai.get("reason", ""),
-             ai.get("health_score") or sensor.get("health_score", 0), ai.get("next_check_minutes", 15),
-             ai.get("pump_duration_sec", 0), ai.get("confidence", 0),
-             ai.get("risk_level", "unknown"))
+    from database.connection import SessionFactory
+    from database.repositories import ActivityRepository, FarmRepository, RecommendationRepository, SensorReadingRepository
+
+    async with SessionFactory() as session:
+        farm_repo = FarmRepository(session)
+        farms = await farm_repo.list_active()
+        farm_id = farms[0].id if farms else (await farm_repo.create(
+            name="Default Farm",
+            description="Auto-created default farm",
+            location="Kolkata",
+            latitude=22.5726,
+            longitude=88.3639,
+            area=100.0,
+            crop="Tomato",
+            soil_type="Loam",
+            climate="Warm",
+            mode="Virtual",
+            active=True,
+        )).id
+
+        sensor_repo = SensorReadingRepository(session)
+        await sensor_repo.create(
+            farm_id=farm_id,
+            device_id=None,
+            soil_moisture=sensor.get("soil"),
+            temperature=sensor.get("temp"),
+            humidity=sensor.get("hum"),
+            light=sensor.get("light"),
+            rain=bool(sensor.get("rain", False)),
+            wind_speed=None,
+            uv_index=None,
+            air_pressure=None,
+            timestamp=datetime.datetime.utcnow(),
         )
-        await db.commit()
+
+        recommendation_repo = RecommendationRepository(session)
+        await recommendation_repo.create(
+            farm_id=farm_id,
+            decision=ai.get("decision", "SKIP"),
+            confidence=ai.get("confidence", 0),
+            reason=ai.get("reason", ""),
+            risk_level=ai.get("risk_level", "unknown"),
+            generated_by="mqtt_worker",
+            timestamp=datetime.datetime.utcnow(),
+            approved=False,
+        )
+
+        activity_repo = ActivityRepository(session)
+        await activity_repo.create(
+            farm_id=farm_id,
+            action_type="mqtt_sensor",
+            message="MQTT sensor update persisted",
+            metadata_json=json.dumps({"decision": ai.get("decision", "SKIP")}),
+            created_at=datetime.datetime.utcnow(),
+        )
 
 # ── WebSocket broadcast ───────────────────────────────────────────────────────
 async def _broadcast(payload: dict):
