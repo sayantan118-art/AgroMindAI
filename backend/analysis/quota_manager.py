@@ -151,27 +151,26 @@ class SqlaQuotaStore:
         from database.models.api_quota_state import ApiQuotaState
         try:
             dialect = await self._dialect_name()
-            now_s, lease_s = now.isoformat(), lease_until.isoformat()
             async with self.session_factory() as session:
                 async with session.begin():
                     await session.execute(
                         _conflict_safe_insert(session, ApiQuotaState, dialect, {
                             "provider": provider, "model": model, "key_fingerprint": fingerprint,
-                            "state": AVAILABLE, "updated_at": now_s,
+                            "state": AVAILABLE, "updated_at": now,
                         })
                     )
                     result = await session.execute(
                         update(ApiQuotaState)
-                        .values(in_flight_claim_until=lease_s, last_attempt_at=now_s, updated_at=now_s)
+                        .values(in_flight_claim_until=lease_until, last_attempt_at=now, updated_at=now)
                         .where(
                             ApiQuotaState.provider == provider,
                             ApiQuotaState.model == model,
                             ApiQuotaState.key_fingerprint == fingerprint,
                             ApiQuotaState.state != CREDENTIAL_INVALID,
                             (ApiQuotaState.state == AVAILABLE)
-                            | ((ApiQuotaState.state == COOLDOWN) & (ApiQuotaState.reset_at.is_not(None)) & (ApiQuotaState.reset_at <= now_s)),
+                            | ((ApiQuotaState.state == COOLDOWN) & (ApiQuotaState.reset_at.is_not(None)) & (ApiQuotaState.reset_at <= now)),
                             (ApiQuotaState.in_flight_claim_until.is_(None))
-                            | (ApiQuotaState.in_flight_claim_until < now_s),
+                            | (ApiQuotaState.in_flight_claim_until < now),
                         )
                     )
                     return result.rowcount == 1
@@ -182,11 +181,18 @@ class SqlaQuotaStore:
     async def _update(self, provider, model, fingerprint, now, values: dict[str, Any]) -> None:
         from database.models.api_quota_state import ApiQuotaState
         try:
+            dialect = await self._dialect_name()
             async with self.session_factory() as session:
                 async with session.begin():
                     await session.execute(
+                        _conflict_safe_insert(session, ApiQuotaState, dialect, {
+                            "provider": provider, "model": model, "key_fingerprint": fingerprint,
+                            "state": AVAILABLE, "updated_at": now,
+                        })
+                    )
+                    await session.execute(
                         update(ApiQuotaState)
-                        .values(in_flight_claim_until=None, updated_at=now.isoformat(), **values)
+                        .values(in_flight_claim_until=None, updated_at=now, **values)
                         .where(
                             ApiQuotaState.provider == provider,
                             ApiQuotaState.model == model,
@@ -204,7 +210,7 @@ class SqlaQuotaStore:
 
     async def record_cooldown(self, provider, model, fingerprint, now, reset_at, classification, header_meta) -> None:
         await self._update(provider, model, fingerprint, now, {
-            "state": COOLDOWN, "reset_at": reset_at.isoformat(),
+            "state": COOLDOWN, "reset_at": reset_at,
             "last_failure_classification": classification, "header_meta": header_meta,
         })
 
@@ -235,8 +241,10 @@ class SqlaQuotaStore:
                 row = cur.fetchone()
                 if row is None:
                     return None
+                def _iso(v):
+                    return v.isoformat() if isinstance(v, datetime) else v
                 return {
-                    "state": row[0], "reset_at": row[1], "last_attempt_at": row[2],
+                    "state": row[0], "reset_at": _iso(row[1]), "last_attempt_at": _iso(row[2]),
                     "in_flight_claim_until": row[3], "last_failure_classification": row[4],
                 }
         except Exception as exc:

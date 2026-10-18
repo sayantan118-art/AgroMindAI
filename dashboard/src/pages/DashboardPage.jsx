@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useFarms } from '../hooks/useFarms'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
@@ -46,7 +46,7 @@ function SensorCard({ icon: Icon, label, value, unit, color }) {
   return (
     <div className="sensor-card" style={{ borderColor: color + '44' }}>
       <div className="sensor-icon" style={{ color }}>
-        <Icon size={28} />
+        {React.createElement(Icon, { size: 28 })}
       </div>
       <div className="sensor-value" style={{ color }}>{value}<span className="sensor-unit">{unit}</span></div>
       <div className="sensor-label">{label}</div>
@@ -223,7 +223,9 @@ export default function DashboardPage() {
         setFarmOptions(farmsData)
         if (!selectedFarmId && farmsData[0]) setSelectedFarmId(farmsData[0].id)
       }
-    } catch {}
+    } catch {
+      // ignore - keep mock data
+    }
   }, [selectedFarmId])
 
   const fetchLatest = useCallback(async () => {
@@ -258,7 +260,9 @@ export default function DashboardPage() {
           setAnalytics(result.metrics || null)
         }
       }
-    } catch {}
+    } catch {
+      // ignore - keep mock data
+    }
   }, [selectedFarmId])
 
   const fetchHistory = useCallback(async () => {
@@ -268,7 +272,9 @@ export default function DashboardPage() {
         const d = await r.json()
         if (Array.isArray(d) && d.length) setHistory(d.slice(0, 20).reverse())
       }
-    } catch {}
+    } catch {
+      // ignore - keep mock data
+    }
   }, [])
 
   const fetchRecommendation = useCallback(async () => {
@@ -307,17 +313,19 @@ export default function DashboardPage() {
         const ws = new WebSocket(`${WS_BASE}/ws/dashboard`)
         wsRef.current = ws
         ws.onopen = () => setConnected(true)
-        ws.onmessage = (e) => { try { const d = JSON.parse(e.data); setData(d) } catch {} }
+        ws.onmessage = (e) => { try { const d = JSON.parse(e.data); setData(d) } catch { /* ignore parse error */ } }
         ws.onclose = () => { setConnected(false); setTimeout(connect, 3000) }
         ws.onerror = () => ws.close()
-      } catch {}
+      } catch {
+        // ignore connection error
+      }
     }
     connect()
     return () => wsRef.current?.close()
   }, [])
 
   useEffect(() => {
-    setLoading(true)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchFarmOptions()
     fetchLatest()
     fetchHistory()
@@ -334,7 +342,18 @@ export default function DashboardPage() {
   }, [selectedFarmId, data])
 
   const d = data || MOCK
+
   const soilC = soilColor(d.soil_moisture)
+
+  const mockHistory = useMemo(() => Array.from({ length: 8 }, (_, i) => {
+    const soilVar = ((i * 7 + 3) % 20) - 10
+    const tempVar = ((i * 5 + 1) % 8) - 4
+    return {
+      soil_moisture: MOCK.soil_moisture + soilVar,
+      temperature: MOCK.temperature + tempVar * 0.5,
+      ts: `2026-03-05T${String(10 + i).padStart(2, '0')}:00`
+    }
+  }), [])
 
   return (
     <div className="app-root">
@@ -410,11 +429,7 @@ export default function DashboardPage() {
           />
         </div>
 
-        <MoistureChart history={history.length ? history : Array.from({ length: 8 }, (_, i) => ({
-          soil_moisture: MOCK.soil_moisture + (Math.random() * 20 - 10),
-          temperature: MOCK.temperature + (Math.random() * 4 - 2),
-          ts: `2026-03-05T${String(10 + i).padStart(2, '0')}:00`
-        }))} />
+        <MoistureChart history={history.length ? history : mockHistory} />
 
         <WeatherCard defaultLat={activeFarm.lat} defaultLon={activeFarm.lon} key={activeFarmId} />
       </main>

@@ -92,13 +92,18 @@ async def test_concurrent_claims_allow_exactly_one(temp_db, fixed_clock):
     await qm.record_success(KEY)
 
 
-async def test_fail_closed_when_db_unavailable(temp_db, fixed_clock):
+async def test_fail_closed_when_db_unavailable(temp_db, fixed_clock, monkeypatch):
     qm = QuotaManager.for_session_factory(temp_db, clock=fixed_clock)
-    # Dispose the engine so sessions cannot open -> claim must fail closed.
-    import database.connection as conn
-    await conn.engine.dispose()
+    # Simulate DB unavailability by making the store's session factory raise.
+    from contextlib import asynccontextmanager
+    @asynccontextmanager
+    async def failing_factory():
+        raise RuntimeError("DB unavailable")
+        yield
+    monkeypatch.setattr(qm.store, "session_factory", failing_factory)
     claim = await qm.claim_attempt(KEY)
     assert not claim.allowed
+    assert claim.reason == "denied"
 
 
 def test_parse_duration_variants():

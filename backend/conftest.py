@@ -41,8 +41,8 @@ async def temp_db(tmp_path, monkeypatch):
     from database.migrations_runner import run_pending_migrations
     from database.seed import seed_if_needed
     await init_db()
-    await run_pending_migrations(conn.engine, str(db_path))
     await seed_if_needed()
+    await run_pending_migrations(conn.engine, str(db_path))
     yield conn.SessionFactory
     try:
         if conn.engine is not None:

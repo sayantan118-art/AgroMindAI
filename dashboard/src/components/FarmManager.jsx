@@ -69,7 +69,7 @@ function LocationSearch({ onSelect }) {
       try {
         const r = await searchLocation(q, 6)
         setResults(r)
-      } catch (e) {
+      } catch {
         setError('Search failed. Check your connection.')
         setResults([])
       } finally {
