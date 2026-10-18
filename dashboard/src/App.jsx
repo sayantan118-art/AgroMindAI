@@ -3,7 +3,7 @@ import { useFarms } from './hooks/useFarms'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts'
-import { Droplets, Thermometer, Wind, Sun, CloudRain, Zap } from 'lucide-react'
+import { Droplets, Thermometer, Wind, Sun, CloudRain, Zap, Brain, History, Loader2, AlertCircle, CheckCircle } from 'lucide-react'
 import WeatherCard from './components/WeatherCard'
 import FarmManager from './components/FarmManager'
 import './App.css'
@@ -232,6 +232,12 @@ export default function App() {
   const [loading, setLoading] = useState(true)
   const wsRef = useRef(null)
 
+  // Analysis state
+  const [analysisReport, setAnalysisReport] = useState(null)
+  const [analysisLoading, setAnalysisLoading] = useState(false)
+  const [analysisHistory, setAnalysisHistory] = useState([])
+  const [showHistory, setShowHistory] = useState(false)
+
   // Farm management
   const { farms, activeFarm, activeFarmId, selectFarm, createFarm, removeFarm } = useFarms()
 
@@ -324,6 +330,79 @@ export default function App() {
     }
   }, [data])
 
+  const fetchAnalyze = useCallback(async () => {
+    setAnalysisLoading(true)
+    try {
+      const r = await fetch(`${API_BASE}/analysis/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ force: false }),
+      })
+      if (r.ok) {
+        const result = await r.json()
+        setAnalysisReport(result.report)
+      } else if (r.status === 429) {
+        const err = await r.json()
+        setAnalysisReport({
+          overall_status: 'insufficient_data',
+          health_score: null,
+          irrigation_recommendation: 'INSUFFICIENT_DATA',
+          dashboard_summary: `Analysis rate limited. Retry after ${err.retry_after_seconds || 60} seconds.`,
+          per_sensor_assessments: [],
+          risks: [],
+          evidence: [],
+          recommended_actions: ['Wait for rate limit to reset and try again.'],
+          data_quality_warnings: [],
+          analysis_method: 'rule_engine',
+          engine_id: 'rule_engine',
+          analysis_version: '1.0',
+          generated_at: new Date().toISOString(),
+          sensor_data_timestamp: null,
+          crop_profile: { name: 'default', version: '1.0', thresholds: {} },
+          weather_summary: { available: false },
+          history_summary: { available: false },
+          input_hash: '',
+        })
+      }
+    } catch {
+      // Backend unavailable - show rule engine fallback notice
+      setAnalysisReport({
+        overall_status: 'insufficient_data',
+        health_score: null,
+        irrigation_recommendation: 'INSUFFICIENT_DATA',
+        dashboard_summary: 'Analysis service unavailable. Using rule-engine fallback.',
+        per_sensor_assessments: [],
+        risks: [],
+        evidence: [],
+        recommended_actions: ['Check backend connectivity.'],
+        data_quality_warnings: [],
+        analysis_method: 'rule_engine',
+        engine_id: 'rule_engine',
+        analysis_version: '1.0',
+        generated_at: new Date().toISOString(),
+        sensor_data_timestamp: null,
+        crop_profile: { name: 'default', version: '1.0', thresholds: {} },
+        weather_summary: { available: false },
+        history_summary: { available: false },
+        input_hash: '',
+      })
+    } finally {
+      setAnalysisLoading(false)
+    }
+  }, [])
+
+  const fetchAnalysisHistory = useCallback(async () => {
+    try {
+      const r = await fetch(`${API_BASE}/analysis/reports?limit=20`)
+      if (r.ok) {
+        const result = await r.json()
+        setAnalysisHistory(result.reports || [])
+      }
+    } catch {
+      setAnalysisHistory([])
+    }
+  }, [])
+
   // WebSocket
   useEffect(() => {
     function connect() {
@@ -344,7 +423,6 @@ export default function App() {
 
   // Polling
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchFarmOptions()
     fetchLatest(); fetchHistory(); fetchRecommendation()
     const a = setInterval(fetchLatest, 5000)
@@ -405,6 +483,50 @@ export default function App() {
               {connected ? 'System Online' : 'Offline — Mock Data'}
             </span>
           </div>
+          <div style={{ display: 'flex', gap: 8, marginLeft: 16 }}>
+            <button
+              className="analyze-btn"
+              onClick={fetchAnalyze}
+              disabled={analysisLoading}
+              style={{
+                background: analysisLoading ? '#334155' : '#1d4ed8',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 8,
+                padding: '8px 16px',
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: analysisLoading ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                opacity: analysisLoading ? 0.7 : 1,
+              }}
+            >
+              {analysisLoading ? <Loader2 size={16} /> : <Brain size={16} />}
+              {analysisLoading ? 'Analyzing…' : 'Analyze Crop Health'}
+            </button>
+            <button
+              className="history-btn"
+              onClick={() => { fetchAnalysisHistory(); setShowHistory(true); }}
+              style={{
+                background: '#334155',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 8,
+                padding: '8px 16px',
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+              }}
+            >
+              <History size={16} />
+              History
+            </button>
+          </div>
         </div>
       </header>
 
@@ -461,6 +583,101 @@ export default function App() {
 
       {/* ── Floating Pump ── */}
       <PumpControl />
+
+      {/* ── Analysis Report Modal/Panel ── */}
+      {analysisReport && (
+        <div className="analysis-report-overlay" onClick={() => setAnalysisReport(null)}>
+          <div className="analysis-report-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="analysis-report-header">
+              <h3><Brain size={20} /> Crop Health Analysis</h3>
+              <button className="close-btn" onClick={() => setAnalysisReport(null)}>×</button>
+            </div>
+            <div className="analysis-report-meta">
+              <span><strong>Report Time:</strong> {new Date(analysisReport.generated_at).toLocaleString()}</span>
+              <span><strong>Sensor Data Time:</strong> {analysisReport.sensor_data_timestamp ? new Date(analysisReport.sensor_data_timestamp).toLocaleString() : 'N/A'}</span>
+              <span><strong>Method:</strong> {analysisReport.analysis_method === 'external_model' ? 'AI Model' : 'Rule Engine'}</span>
+            </div>
+            <div className="analysis-report-status" style={{ borderLeftColor: decisionColor(analysisReport.irrigation_recommendation) }}>
+              <span className="status-badge" style={{ background: decisionColor(analysisReport.irrigation_recommendation) + '22', color: decisionColor(analysisReport.irrigation_recommendation), borderColor: decisionColor(analysisReport.irrigation_recommendation) }}>
+                {analysisReport.irrigation_recommendation}
+              </span>
+              <span className="health-score">{analysisReport.health_score !== null ? `Health Score: ${analysisReport.health_score}/100` : 'Health Score: N/A'}</span>
+            </div>
+            <div className="analysis-report-summary">{analysisReport.dashboard_summary}</div>
+            {analysisReport.per_sensor_assessments.length > 0 && (
+              <div className="analysis-report-section">
+                <h4>Sensor Assessments</h4>
+                <ul>
+                  {analysisReport.per_sensor_assessments.map((a, i) => (
+                    <li key={i}><strong>{a.sensor}:</strong> {a.note} <span className={`status-${a.status}`}>{a.status}</span></li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {analysisReport.risks.length > 0 && (
+              <div className="analysis-report-section">
+                <h4>Risks</h4>
+                <ul>
+                  {analysisReport.risks.map((r, i) => (
+                    <li key={i}><strong>{r.name} ({r.severity}):</strong> {r.evidence}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {analysisReport.recommended_actions.length > 0 && (
+              <div className="analysis-report-section">
+                <h4>Recommended Actions</h4>
+                <ul>
+                  {analysisReport.recommended_actions.map((a, i) => <li key={i}>{a}</li>)}
+                </ul>
+              </div>
+            )}
+            {analysisReport.data_quality_warnings.length > 0 && (
+              <div className="analysis-report-section warnings">
+                <h4><AlertCircle size={16} /> Data Quality Warnings</h4>
+                <ul>
+                  {analysisReport.data_quality_warnings.map((w, i) => <li key={i}>{w}</li>)}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Analysis History Modal ── */}
+      {showHistory && (
+        <div className="analysis-report-overlay" onClick={() => setShowHistory(false)}>
+          <div className="analysis-report-panel" style={{ maxWidth: 700 }} onClick={(e) => e.stopPropagation()}>
+            <div className="analysis-report-header">
+              <h3><History size={20} /> Analysis History</h3>
+              <button className="close-btn" onClick={() => setShowHistory(false)}>×</button>
+            </div>
+            {analysisHistory.length === 0 ? (
+              <div className="analysis-report-empty">No analysis reports yet. Click "Analyze Crop Health" to generate one.</div>
+            ) : (
+              <div className="analysis-history-list">
+                {analysisHistory.map((r) => (
+                  <div key={r.id} className="analysis-history-item" onClick={() => {
+                    setAnalysisReport(r.report);
+                    setShowHistory(false);
+                  }}>
+                    <div className="history-item-header">
+                      <span className="history-date">{new Date(r.created_at).toLocaleString()}</span>
+                      <span className="history-method">{r.analysis_method === 'external_model' ? 'AI Model' : 'Rule Engine'}</span>
+                    </div>
+                    <div className="history-item-summary">{r.dashboard_summary || r.summary}</div>
+                    <div className="history-item-meta">
+                      <span>Status: {r.overall_status}</span>
+                      {r.health_score !== null && <span>Score: {r.health_score}/100</span>}
+                      <span>Irrigation: {r.irrigation_recommendation}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

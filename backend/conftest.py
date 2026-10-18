@@ -1,17 +1,49 @@
 """Shared pytest fixtures.
 
 Each test gets a fresh temp SQLite DB (init + migrations + seed), an
-injectable clock, a mocked weather fetcher, and ready-to-use service instances.
+injective clock, a mocked weather fetcher, and ready-to-use service instances.
 Groq is always mocked in tests (we never spend real quota).
+Network access is blocked by default to ensure no real calls are made.
 """
 
 from __future__ import annotations
 
 import datetime
 import os
+import socket
 from datetime import timedelta, timezone
 
 import pytest
+
+
+# Socket blocking fixture (not autouse - use explicitly in tests that need it)
+# This prevents real network calls during tests while allowing local socket operations
+_original_socket = socket.socket
+_original_socketpair = getattr(socket, 'socketpair', None)
+
+def _blocked_socket(*args, **kwargs):
+    family = args[0] if args else kwargs.get('family', socket.AF_INET)
+    if family in (socket.AF_INET, socket.AF_INET6):
+        raise RuntimeError("Network access blocked during tests")
+    return _original_socket(*args, **kwargs)
+
+def _blocked_socketpair(*args, **kwargs):
+    if _original_socketpair:
+        return _original_socketpair(*args, **kwargs)
+    raise RuntimeError("socketpair not available")
+
+@pytest.fixture
+def block_network():
+    """Block external network access during tests to prevent real API calls.
+    Use this fixture explicitly in tests that should not make network calls.
+    """
+    socket.socket = _blocked_socket
+    if hasattr(socket, 'socketpair'):
+        socket.socketpair = _blocked_socketpair
+    yield
+    socket.socket = _original_socket
+    if hasattr(socket, 'socketpair'):
+        socket.socketpair = _original_socketpair
 
 
 @pytest.fixture

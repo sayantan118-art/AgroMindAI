@@ -385,7 +385,17 @@ def _hget(headers: dict[str, str], name: str) -> str | None:
 
 
 def classify_quota_failure(headers: dict[str, str], body: Any) -> tuple[str, timedelta]:
-    """Return (classification, reset_delta). Conservative fallback when unsure."""
+    """Return (classification, reset_delta). Conservative fallback when unsure.
+    
+    Priority (per Groq rate-limit docs):
+    1. Retry-After (explicit server directive) - wins when present
+    2. x-ratelimit-reset-tokens when x-ratelimit-remaining-tokens == 0
+    3. x-ratelimit-reset-requests when x-ratelimit-remaining-requests == 0
+    4. Conservative fallback (DEFAULT_BACKOFF_SECONDS)
+    
+    Per-minute limits use reset-tokens/reset-requests with small values (seconds).
+    Daily limits use large values (86400s). We use the specific exhausted resource's reset.
+    """
     retry_after = _parse_retry_after(_hget(headers, "retry-after"))
     reset_requests = parse_duration(_hget(headers, "x-ratelimit-reset-requests"))
     reset_tokens = parse_duration(_hget(headers, "x-ratelimit-reset-tokens"))
@@ -395,28 +405,25 @@ def classify_quota_failure(headers: dict[str, str], body: Any) -> tuple[str, tim
     token_exhausted = remaining_tokens is not None and str(remaining_tokens).strip() in ("0", "0.0")
     request_exhausted = remaining_requests is not None and str(remaining_requests).strip() in ("0", "0.0")
 
-    candidates: list[float] = []
-    if token_exhausted and reset_tokens is not None:
-        candidates.append(reset_tokens)
-    if request_exhausted and reset_requests is not None:
-        candidates.append(reset_requests)
+    # Retry-After is an explicit server directive - use it directly when present
     if retry_after is not None:
-        candidates.append(retry_after)
-    # Prefer the longest trustworthy reset so we never resume too early.
-    if not candidates and (reset_tokens is not None or reset_requests is not None):
+        return TEMP_RATE_LIMIT, timedelta(seconds=max(1.0, retry_after))
+
+    candidates: list[tuple[str, float]] = []  # (classification, reset_seconds)
+    if token_exhausted and reset_tokens is not None:
+        candidates.append((TOKEN_QUOTA, reset_tokens))
+    if request_exhausted and reset_requests is not None:
+        candidates.append((REQUEST_QUOTA, reset_requests))
+    # If neither explicitly exhausted but reset headers present, use the longest (conservative)
+    if not candidates:
         if reset_tokens is not None:
-            candidates.append(reset_tokens)
+            candidates.append((TOKEN_QUOTA, reset_tokens))
         if reset_requests is not None:
-            candidates.append(reset_requests)
+            candidates.append((REQUEST_QUOTA, reset_requests))
 
     if candidates:
-        delta = max(candidates)
-        if token_exhausted and not request_exhausted:
-            cls = TOKEN_QUOTA
-        elif request_exhausted and not token_exhausted:
-            cls = REQUEST_QUOTA
-        else:
-            cls = TEMP_RATE_LIMIT
+        # Prefer the longest trustworthy reset so we never resume too early
+        cls, delta = max(candidates, key=lambda x: x[1])
         return cls, timedelta(seconds=max(1.0, delta))
 
     # No trustworthy reset → documented conservative backoff.

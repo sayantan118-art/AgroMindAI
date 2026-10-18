@@ -260,3 +260,201 @@ body {
   .weather-stat-box  { min-width: 75px; padding: 8px 10px; }
   .weather-daily-row { grid-template-columns: 80px 28px 1fr 40px; }
 }
+
+/* ── Analysis Report Panel ─────────────────────────────────────────────────── */
+.analysis-report-overlay {
+  position: fixed;
+  inset: 0;
+  background: #000a;
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: fadeIn 0.2s ease;
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.analysis-report-panel {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 16px;
+  max-width: 640px;
+  width: 100%;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 16px 64px #000c;
+  animation: slideUp 0.2s ease;
+}
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.analysis-report-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #334155;
+}
+.analysis-report-header h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #f1f5f9;
+}
+.analysis-report-header .close-btn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 24px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 4px;
+}
+.analysis-report-header .close-btn:hover { color: #f1f5f9; }
+
+.analysis-report-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 12px 20px;
+  border-bottom: 1px solid #334155;
+  font-size: 12px;
+  color: #94a3b8;
+}
+.analysis-report-meta strong { color: #cbd5e1; }
+
+.analysis-report-status {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 20px;
+  border-bottom: 1px solid #334155;
+  border-left: 4px solid;
+}
+.status-badge {
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid;
+}
+.health-score { color: #94a3b8; font-size: 13px; }
+
+.analysis-report-summary {
+  padding: 16px 20px;
+  border-bottom: 1px solid #334155;
+  color: #cbd5e1;
+  line-height: 1.6;
+  font-size: 14px;
+}
+
+.analysis-report-section {
+  padding: 16px 20px;
+  border-bottom: 1px solid #334155;
+}
+.analysis-report-section h4 {
+  font-size: 13px;
+  font-weight: 600;
+  color: #94a3b8;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.analysis-report-section ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.analysis-report-section li {
+  font-size: 13px;
+  color: #cbd5e1;
+  line-height: 1.5;
+}
+.analysis-report-section li strong { color: #f1f5f9; }
+
+.analysis-report-section.warnings {
+  background: #1e1b0f;
+  border-left: 3px solid #f59e0b;
+}
+.analysis-report-section.warnings h4 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #f59e0b;
+}
+
+.status-valid { color: #22c55e; }
+.status-missing { color: #f59e0b; }
+.status-out_of_range { color: #ef4444; }
+.status-stale { color: #f97316; }
+.status-implausible { color: #f97316; }
+
+/* ── Analysis History ───────────────────────────────────────────────────────── */
+.analysis-history-list {
+  padding: 8px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.analysis-history-item {
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.analysis-history-item:hover {
+  border-color: #1d4ed8;
+  background: #1e293b;
+}
+.history-item-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+.history-date { color: #94a3b8; }
+.history-method {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  background: #1d4ed822;
+  color: #60a5fa;
+}
+.history-item-summary {
+  color: #cbd5e1;
+  font-size: 13px;
+  margin-bottom: 6px;
+  line-height: 1.5;
+}
+.history-item-meta {
+  display: flex;
+  gap: 12px;
+  font-size: 11px;
+  color: #64748b;
+}
+
+.analysis-report-empty {
+  padding: 32px;
+  text-align: center;
+  color: #64748b;
+  font-size: 14px;
+}
+
+/* ── Analyze Button ─────────────────────────────────────────────────────────── */
+.analyze-btn, .history-btn {
+  transition: all 0.15s ease;
+}
+.analyze-btn:hover:not(:disabled) { background: #1e3a8a; transform: translateY(-1px); box-shadow: 0 4px 16px #1d4ed844; }
+.history-btn:hover { background: #475569; transform: translateY(-1px); }

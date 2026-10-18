@@ -117,11 +117,12 @@ def test_parse_duration_variants():
 
 
 def test_classify_quota_failure_uses_headers():
+    # Retry-After takes precedence when present
     cls, delta = classify_quota_failure(
         {"Retry-After": "120", "x-ratelimit-reset-tokens": "2m",
          "x-ratelimit-remaining-tokens": "0"}, None)
-    assert cls == TOKEN_QUOTA
-    assert delta.total_seconds() == pytest.approx(120, rel=1e-2)
+    assert cls == TEMP_RATE_LIMIT
+    assert delta.total_seconds() == 120
 
     cls, delta = classify_quota_failure(
         {"x-ratelimit-reset-requests": "5m", "x-ratelimit-remaining-requests": "0"}, None)
@@ -144,3 +145,101 @@ async def test_other_failure_does_not_set_cooldown(qm):
     await qm.record_other_failure(KEY)  # e.g. 5xx
     view = await qm.get_view(KEY)
     assert view.state == AVAILABLE  # no cooldown for non-quota failures
+
+
+def test_classify_per_minute_token_exhaustion_with_daily_reset():
+    """Per-minute token limit hit, but daily reset header present -> use per-minute reset (short cooldown)."""
+    # Per-minute token exhaustion: remaining-tokens=0, reset-tokens=60s (1 minute)
+    # Daily reset header also present but should be ignored for per-minute limit
+    headers = {
+        "x-ratelimit-reset-tokens": "60",        # 1 minute = per-minute limit
+        "x-ratelimit-remaining-tokens": "0",
+        "x-ratelimit-reset-requests": "86400",   # 24 hours = daily limit (should not apply)
+        "x-ratelimit-remaining-requests": "100", # requests still available
+    }
+    cls, delta = classify_quota_failure(headers, None)
+    assert cls == TOKEN_QUOTA
+    assert delta.total_seconds() == pytest.approx(60, rel=1e-2)  # short cooldown
+
+
+def test_classify_daily_request_exhaustion():
+    """Daily request limit exhausted -> long cooldown (daily reset)."""
+    headers = {
+        "x-ratelimit-reset-requests": "86400",   # 24 hours
+        "x-ratelimit-remaining-requests": "0",
+        "x-ratelimit-reset-tokens": "60",        # per-minute reset also present
+        "x-ratelimit-remaining-tokens": "1000",  # tokens still available
+    }
+    cls, delta = classify_quota_failure(headers, None)
+    assert cls == REQUEST_QUOTA
+    assert delta.total_seconds() == pytest.approx(86400, rel=1e-2)  # long cooldown
+
+
+def test_classify_no_headers_uses_conservative_fallback():
+    """No rate-limit headers -> documented conservative fallback (300s)."""
+    cls, delta = classify_quota_failure({}, None)
+    assert cls == TEMP_RATE_LIMIT
+    assert delta.total_seconds() == 300
+
+
+def test_classify_malformed_values_handled_gracefully():
+    """Malformed header values -> fall back to conservative backoff."""
+    headers = {
+        "Retry-After": "not-a-number",
+        "x-ratelimit-reset-tokens": "invalid",
+        "x-ratelimit-remaining-tokens": "0",
+    }
+    cls, delta = classify_quota_failure(headers, None)
+    assert cls == TEMP_RATE_LIMIT
+    assert delta.total_seconds() == 300
+
+
+def test_classify_retry_after_takes_precedence_when_explicit():
+    """Retry-After header is explicit -> use it even if other headers present."""
+    headers = {
+        "Retry-After": "45",                     # explicit 45 seconds
+        "x-ratelimit-reset-tokens": "300",       # 5 minutes
+        "x-ratelimit-remaining-tokens": "0",
+    }
+    cls, delta = classify_quota_failure(headers, None)
+    assert cls == TEMP_RATE_LIMIT
+    assert delta.total_seconds() == 45  # Retry-After wins
+
+
+def test_classify_both_token_and_request_exhausted():
+    """Both token and request exhausted -> longest reset wins, classification matches that resource."""
+    headers = {
+        "x-ratelimit-reset-tokens": "120",
+        "x-ratelimit-remaining-tokens": "0",
+        "x-ratelimit-reset-requests": "180",
+        "x-ratelimit-remaining-requests": "0",
+    }
+    cls, delta = classify_quota_failure(headers, None)
+    # Request reset is longer (180s vs 120s), so REQUEST_QUOTA wins
+    assert cls == REQUEST_QUOTA
+    assert delta.total_seconds() == 180
+
+
+def test_classify_malformed_remaining_values():
+    """Non-numeric remaining values -> treated as not exhausted."""
+    headers = {
+        "x-ratelimit-reset-tokens": "60",
+        "x-ratelimit-remaining-tokens": "abc",  # malformed
+        "x-ratelimit-reset-requests": "300",
+        "x-ratelimit-remaining-requests": "0",
+    }
+    cls, delta = classify_quota_failure(headers, None)
+    # tokens not exhausted (malformed), requests exhausted -> REQUEST_QUOTA
+    assert cls == REQUEST_QUOTA
+    assert delta.total_seconds() == pytest.approx(300, rel=1e-2)
+
+
+def test_classify_partial_headers_only_token_exhausted():
+    """Only token exhaustion headers present -> TOKEN_QUOTA."""
+    headers = {
+        "x-ratelimit-reset-tokens": "90",
+        "x-ratelimit-remaining-tokens": "0",
+    }
+    cls, delta = classify_quota_failure(headers, None)
+    assert cls == TOKEN_QUOTA
+    assert delta.total_seconds() == pytest.approx(90, rel=1e-2)
